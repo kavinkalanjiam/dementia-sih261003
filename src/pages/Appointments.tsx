@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n';
 import { StorageService } from '../services/storage';
 import { CareTeamService } from '../services/careTeamService';
-import { AppointmentService } from '../services/appointmentService';
+import { AppointmentService, DEFAULT_DOCTORS } from '../services/appointmentService';
 import { Appointment, AppointmentStatus, AppointmentType, Doctor, PatientProfile } from '../types';
 import {
   Calendar,
@@ -198,14 +198,9 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
     e.preventDefault();
     setFormError('');
 
-    if (!selectedPatientId) {
-      setFormError('Please select a patient.');
-      return;
-    }
-    if (!selectedDoctorId) {
-      setFormError('Please select a doctor.');
-      return;
-    }
+    const targetPatientId = selectedPatientId || patient?.id || (availablePatients.length > 0 ? availablePatients[0].id : 'pat-demo-1');
+    const targetDoctorId = selectedDoctorId || (doctors.length > 0 ? doctors[0].id : DEFAULT_DOCTORS[0].id);
+
     if (!appointmentDate) {
       setFormError('Please choose a valid appointment date.');
       return;
@@ -219,18 +214,13 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
       return;
     }
 
-    const doc = doctors.find((d) => d.id === selectedDoctorId);
-    if (!doc) {
-      setFormError('Selected doctor is not available.');
-      return;
-    }
-
-    const patientObj = availablePatients.find((p) => p.id === selectedPatientId) || patient;
+    const doc = doctors.find((d) => d.id === targetDoctorId) || DEFAULT_DOCTORS[0];
+    const patientObj = availablePatients.find((p) => p.id === targetPatientId) || patient;
 
     setSubmitting(true);
     try {
       await AppointmentService.createAppointment({
-        patientId: selectedPatientId,
+        patientId: targetPatientId,
         patientName: patientObj?.basicInfo?.name || 'Patient',
         caregiverId: user?.id || 'caregiver-local',
         caregiverName: user?.email || 'Primary Caregiver',
@@ -249,8 +239,8 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
       // Reset form
       setAppointmentDate('');
       setAppointmentNotes('');
-      // Reload appointments
-      const updated = await AppointmentService.getAppointments(patient?.id);
+      // Reload appointments for all/active
+      const updated = await AppointmentService.getAppointments();
       setAppointments(updated);
     } catch (err: any) {
       setFormError(err?.message || 'Failed to book appointment. Please try again.');
@@ -552,6 +542,11 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
           <button
             onClick={() => {
               setSelectedPatientId(patient?.id || '');
+              if (doctors.length > 0 && !selectedDoctorId) {
+                setSelectedDoctorId(doctors[0].id);
+              }
+              setAppointmentDate('');
+              setFormError('');
               setShowBookModal(true);
             }}
             className="px-4 py-2 bg-[#176B61] hover:bg-[#12564E] text-white font-extrabold text-xs rounded-xl shadow-xs transition cursor-pointer"

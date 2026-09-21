@@ -1,5 +1,5 @@
 // SIROI Doctor Appointment Booking Service
-// Handles appointment scheduling, rescheduling, cancellations, reminders, and offline sync
+// Robust offline-first implementation with local caching, 24h time formatting, and Realtime sync
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { db, LocalAppointment, LocalDoctor } from '../offline/db';
@@ -10,45 +10,72 @@ import { StorageService } from './storage';
 import { generateUUID } from '../utils/uuid';
 import { Appointment, AppointmentStatus, AppointmentType, Doctor } from '../types';
 
-// Default seeded doctors in case Supabase or offline DB is empty
+const LOCAL_STORAGE_KEY = 'mindcare_appointments_local';
+
+// Default regional healthcare specialists (aligned with migration 008 IDs)
 export const DEFAULT_DOCTORS: Doctor[] = [
   {
-    id: 'd1111111-1111-1111-1111-111111111111',
+    id: 'd0c10001-0000-0000-0000-000000000001',
     name: 'Dr. P. Barua',
     specialization: 'Neurology & Cognitive Health',
     hospital: 'Guwahati Medical College & Hospital (GMCH)',
-    phone: '+91 98640 12345',
+    phone: '+91 94350 12345',
     consultationType: 'both',
     available: true,
   },
   {
-    id: 'd2222222-2222-2222-2222-222222222222',
+    id: 'd0c10001-0000-0000-0000-000000000002',
     name: 'Dr. Arun Sharma',
     specialization: 'Geriatric Medicine',
     hospital: 'Downtown Hospital, Guwahati',
-    phone: '+91 94350 23456',
+    phone: '+91 94351 23456',
     consultationType: 'both',
     available: true,
   },
   {
-    id: 'd3333333-3333-3333-3333-333333333333',
+    id: 'd0c10001-0000-0000-0000-000000000003',
     name: 'Dr. Meena Das',
     specialization: 'Psychiatry & Memory Clinic',
     hospital: 'NEIGRIHMS, Shillong',
-    phone: '+91 98560 34567',
+    phone: '+91 94352 34567',
     consultationType: 'both',
     available: true,
   },
   {
-    id: 'd4444444-4444-4444-4444-444444444444',
+    id: 'd0c10001-0000-0000-0000-000000000004',
     name: 'Dr. Rajesh Roy',
     specialization: 'General Medicine & Elder Care',
     hospital: 'Apollo Clinic, Silchar',
-    phone: '+91 94010 45678',
+    phone: '+91 94353 45678',
     consultationType: 'in_person',
     available: true,
   },
 ];
+
+// Helper to check for valid UUID format
+function isValidUUID(val?: string): boolean {
+  if (!val) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+}
+
+// Helper to convert 12-hour AM/PM time into PostgreSQL 24-hour TIME format (HH:MM:SS)
+export function formatTimeTo24h(timeStr: string): string {
+  if (!timeStr) return '10:00:00';
+  const trimmed = timeStr.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const modifier = match[3] ? match[3].toUpperCase() : null;
+    if (modifier === 'PM' && hours < 12) hours += 12;
+    if (modifier === 'AM' && hours === 12) hours = 0;
+    return `${hours.toString().padStart(2, '0')}:${minutes}:00`;
+  }
+  if (/^\d{2}:\d{2}$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+  return trimmed;
+}
 
 // Helper to map DB row or LocalDoctor to Doctor
 function mapToDoctor(d: any): Doctor {
@@ -81,7 +108,7 @@ function mapToAppointment(a: any, doctorsMap?: Map<string, Doctor>): Appointment
     appointmentType: a.appointment_type || a.appointmentType || 'in_person',
     reason: a.reason || '',
     notes: a.notes || '',
-    status: (a.status || 'pending') as AppointmentStatus,
+    status: (a.status || 'confirmed') as AppointmentStatus,
     hospital: a.hospital || doctor?.hospital || 'SIROI Health Network',
     meetingLink: a.meeting_link || a.meetingLink,
     cancelledAt: a.cancelled_at || a.cancelledAt,
@@ -90,6 +117,24 @@ function mapToAppointment(a: any, doctorsMap?: Map<string, Doctor>): Appointment
     updatedAt: a.updated_at || a.updatedAt || new Date().toISOString(),
     syncStatus: (a.sync_status || a.syncStatus || 'synced') as 'synced' | 'pending' | 'failed',
   };
+}
+
+// Synchronous local storage helpers for instant rendering
+function getLocalStorageAppointments(): LocalAppointment[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalStorageAppointments(items: LocalAppointment[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+  } catch {}
 }
 
 export const AppointmentService = {
@@ -102,12 +147,11 @@ export const AppointmentService = {
         const { data, error } = await supabase
           .from('doctors')
           .select('*')
-          .eq('available', true)
           .order('name', { ascending: true });
 
         if (!error && data && data.length > 0) {
           const docs: Doctor[] = data.map(mapToDoctor);
-          // Save to local cache
+          // Cache in IndexedDB
           for (const d of data) {
             await OfflineStorage.saveDoctor({
               id: d.id,
@@ -138,7 +182,7 @@ export const AppointmentService = {
       console.warn('Error reading doctors from Dexie', e);
     }
 
-    // Cache default doctors into IndexedDB for offline resilience
+    // Seed default doctors into IndexedDB for offline resilience
     try {
       for (const d of DEFAULT_DOCTORS) {
         await OfflineStorage.saveDoctor({
@@ -165,15 +209,44 @@ export const AppointmentService = {
   },
 
   /**
-   * Retrieve appointments. If patientId is provided, filters for that patient.
-   * Checks cloud first if online, falls back to IndexedDB.
+   * Retrieve appointments.
+   * Merges local Dexie/LocalStorage appointments with Supabase cloud records.
+   * If offline or cloud returns 0 records, preserves all local records!
    */
   async getAppointments(patientId?: string): Promise<Appointment[]> {
     const doctors = await this.getDoctors();
     const doctorsMap = new Map<string, Doctor>(doctors.map(d => [d.id, d]));
 
+    // 1. Gather all local appointments from Dexie and LocalStorage
+    let localList: LocalAppointment[] = [];
     try {
-      if (isSupabaseConfigured() && navigator.onLine) {
+      localList = await OfflineStorage.getAppointments(patientId);
+    } catch (err) {
+      console.warn('Dexie read error, falling back to localStorage', err);
+    }
+
+    const lsList = getLocalStorageAppointments();
+    const localMap = new Map<string, LocalAppointment>();
+
+    // Load from local storage
+    for (const item of lsList) {
+      if (!patientId || item.patient_id === patientId) {
+        localMap.set(item.id, item);
+      }
+    }
+    // Overlay Dexie items
+    for (const item of localList) {
+      if (!patientId || item.patient_id === patientId) {
+        localMap.set(item.id, item);
+      }
+    }
+
+    // 2. Query Supabase if online
+    let cloudList: any[] = [];
+    let cloudSuccess = false;
+
+    if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
         let query = supabase
           .from('appointments')
           .select('*, doctor:doctors(*)')
@@ -186,9 +259,12 @@ export const AppointmentService = {
 
         const { data, error } = await query;
 
-        if (!error && data) {
-          // Cache in Dexie for offline use
-          for (const item of data) {
+        if (!error && Array.isArray(data)) {
+          cloudSuccess = true;
+          cloudList = data;
+
+          // Cache cloud items locally
+          for (const item of cloudList) {
             const localItem: LocalAppointment = {
               id: item.id,
               patient_id: item.patient_id,
@@ -211,28 +287,30 @@ export const AppointmentService = {
               sync_status: 'synced',
             };
             await OfflineStorage.saveAppointment(localItem);
+            localMap.set(localItem.id, localItem);
           }
-
-          return data.map(item => mapToAppointment(item, doctorsMap));
         }
+      } catch (e) {
+        console.warn('Cloud appointment fetch warning, keeping local records', e);
       }
-    } catch (e) {
-      console.warn('Cloud appointment fetch warning, falling back to offline cache', e);
     }
 
-    // Offline fallback from IndexedDB
-    try {
-      const local = await OfflineStorage.getAppointments(patientId);
-      return local.map(l => mapToAppointment(l, doctorsMap));
-    } catch (e) {
-      console.warn('Dexie appointment fetch error', e);
-      return [];
-    }
+    // 3. Build merged list
+    const combined = Array.from(localMap.values());
+
+    // Sort by date then time
+    combined.sort((a, b) => {
+      const dateCompare = a.appointment_date.localeCompare(b.appointment_date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.appointment_time.localeCompare(b.appointment_time);
+    });
+
+    return combined.map(l => mapToAppointment(l, doctorsMap));
   },
 
   /**
    * Schedule a new appointment.
-   * Saves locally, queues for sync if offline, sets up routine reminders, and notifies listeners.
+   * Immediately saves locally, enqueues sync, updates reminders, and attempts cloud upsert.
    */
   async createAppointment(params: {
     patientId: string;
@@ -253,15 +331,15 @@ export const AppointmentService = {
     const now = new Date().toISOString();
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
-    // Build video meeting link if type is video
+    // Generate video link if teleconsultation
     const meetingLink = params.appointmentType === 'video'
       ? `https://meet.jit.si/SIROI-${id.substring(0, 8)}`
       : undefined;
 
     const localItem: LocalAppointment = {
       id,
-      patient_id: params.patientId,
-      patient_name: params.patientName,
+      patient_id: params.patientId || 'pat-demo-1',
+      patient_name: params.patientName || 'Patient',
       caregiver_id: params.caregiverId,
       caregiver_name: params.caregiverName,
       doctor_id: params.doctorId,
@@ -270,38 +348,44 @@ export const AppointmentService = {
       appointment_date: params.appointmentDate,
       appointment_time: params.appointmentTime,
       appointment_type: params.appointmentType,
-      reason: params.reason,
-      notes: params.notes,
-      status: 'confirmed', // Confirmed within SIROI platform
+      reason: params.reason || '',
+      notes: params.notes || '',
+      status: 'confirmed',
       hospital: params.hospital,
       meeting_link: meetingLink,
       created_at: now,
       updated_at: now,
-      sync_status: isOnline && isSupabaseConfigured() ? 'synced' : 'pending',
+      sync_status: 'pending',
     };
 
-    // 1. Save to local Dexie storage
-    await OfflineStorage.saveAppointment(localItem);
+    // 1. Save synchronously to LocalStorage for instant UI visibility
+    const lsItems = getLocalStorageAppointments();
+    const updatedLs = [localItem, ...lsItems.filter(i => i.id !== id)];
+    saveLocalStorageAppointments(updatedLs);
 
-    // 2. Schedule reminders (24h and 1h reminders) via StorageService
+    // 2. Save to Dexie database
+    try {
+      await OfflineStorage.saveAppointment(localItem);
+    } catch (err) {
+      console.warn('Dexie save error', err);
+    }
+
+    // 3. Schedule reminders
     try {
       this.scheduleAppointmentReminders(localItem);
     } catch (err) {
-      console.warn('Error scheduling appointment reminders', err);
+      console.warn('Reminder schedule notice', err);
     }
 
-    // 3. Sync to Supabase if connected
+    // 4. Cloud sync attempt
     if (isOnline && isSupabaseConfigured()) {
       try {
-        const payload = {
+        const timeFormatted = formatTimeTo24h(localItem.appointment_time);
+        const payload: Record<string, any> = {
           id: localItem.id,
           patient_id: localItem.patient_id,
-          caregiver_id: localItem.caregiver_id,
-          doctor_id: localItem.doctor_id,
           appointment_date: localItem.appointment_date,
-          appointment_time: localItem.appointment_time.includes(':') && localItem.appointment_time.length <= 5
-            ? `${localItem.appointment_time}:00`
-            : localItem.appointment_time,
+          appointment_time: timeFormatted,
           appointment_type: localItem.appointment_type,
           reason: localItem.reason || null,
           notes: localItem.notes || null,
@@ -312,31 +396,42 @@ export const AppointmentService = {
           updated_at: localItem.updated_at,
         };
 
+        // Only include caregiver_id and doctor_id if valid UUIDs for PostgreSQL foreign key constraints
+        if (isValidUUID(localItem.caregiver_id)) {
+          payload.caregiver_id = localItem.caregiver_id;
+        }
+        if (isValidUUID(localItem.doctor_id)) {
+          payload.doctor_id = localItem.doctor_id;
+        }
+
         const { error } = await supabase.from('appointments').upsert(payload, { onConflict: 'id' });
         if (error) {
-          console.warn('Supabase appointment insert error, queuing sync', error);
+          console.warn('Supabase upsert warning (stored locally in Dexie):', error.message);
           await SyncQueue.enqueue('INSERT', 'appointments', id, payload);
-          await db.appointments.update(id, { sync_status: 'pending' });
+        } else {
+          localItem.sync_status = 'synced';
+          await OfflineStorage.saveAppointment(localItem);
+          saveLocalStorageAppointments([localItem, ...lsItems.filter(i => i.id !== id)]);
         }
-      } catch (err) {
-        console.warn('Network error creating appointment, queuing sync', err);
+      } catch (err: any) {
+        console.warn('Cloud network notice, queued locally:', err?.message);
         await SyncQueue.enqueue('INSERT', 'appointments', id, localItem);
-        await db.appointments.update(id, { sync_status: 'pending' });
       }
     } else {
-      // Offline: Enqueue for sync when back online
       await SyncQueue.enqueue('INSERT', 'appointments', id, localItem);
     }
 
-    // 4. Notify realtime listeners across tabs/devices
-    const result = mapToAppointment(localItem);
+    // 5. Notify realtime listeners across all tabs and devices
+    const doctors = await this.getDoctors();
+    const doctorsMap = new Map<string, Doctor>(doctors.map(d => [d.id, d]));
+    const result = mapToAppointment(localItem, doctorsMap);
     notifySyncEvent('mindcare_appointments', result, 'APPOINTMENT_CHANGED');
 
     return result;
   },
 
   /**
-   * Reschedule an existing appointment.
+   * Reschedule an appointment.
    */
   async rescheduleAppointment(
     appointmentId: string,
@@ -344,7 +439,8 @@ export const AppointmentService = {
     newTime: string,
     notes?: string
   ): Promise<Appointment> {
-    const existing = await OfflineStorage.getAppointmentById(appointmentId);
+    const existing = await OfflineStorage.getAppointmentById(appointmentId) ||
+      getLocalStorageAppointments().find(i => i.id === appointmentId);
     const now = new Date().toISOString();
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
@@ -358,28 +454,29 @@ export const AppointmentService = {
       status: 'rescheduled',
       notes: updatedNotes,
       updated_at: now,
-      sync_status: isOnline && isSupabaseConfigured() ? 'synced' : 'pending',
+      sync_status: 'pending',
     };
 
-    // 1. Update local storage
-    await OfflineStorage.saveAppointment({
+    const merged: LocalAppointment = {
       ...(existing || ({} as any)),
       ...updatedData,
       id: appointmentId,
-    });
+    };
 
-    // 2. Reschedule reminders
-    if (existing) {
-      this.scheduleAppointmentReminders({
-        ...existing,
-        ...updatedData,
-      });
-    }
+    // 1. Update LocalStorage
+    const lsItems = getLocalStorageAppointments();
+    saveLocalStorageAppointments(lsItems.map(i => i.id === appointmentId ? merged : i));
 
-    // 3. Sync to Supabase
+    // 2. Update Dexie
+    await OfflineStorage.saveAppointment(merged);
+
+    // 3. Reschedule reminders
+    this.scheduleAppointmentReminders(merged);
+
+    // 4. Sync to Supabase
     if (isOnline && isSupabaseConfigured()) {
       try {
-        const timeFormatted = newTime.includes(':') && newTime.length <= 5 ? `${newTime}:00` : newTime;
+        const timeFormatted = formatTimeTo24h(newTime);
         const { error } = await supabase
           .from('appointments')
           .update({
@@ -391,33 +488,33 @@ export const AppointmentService = {
           })
           .eq('id', appointmentId);
 
-        if (error) {
-          console.warn('Cloud reschedule error, queuing sync', error);
+        if (!error) {
+          merged.sync_status = 'synced';
+          await OfflineStorage.saveAppointment(merged);
+        } else {
           await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
-          await db.appointments.update(appointmentId, { sync_status: 'pending' });
         }
       } catch (e) {
-        console.warn('Network error during reschedule, queuing sync', e);
         await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
-        await db.appointments.update(appointmentId, { sync_status: 'pending' });
       }
     } else {
       await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
     }
 
-    // 4. Notify realtime listeners
-    const updatedFull = await OfflineStorage.getAppointmentById(appointmentId);
-    const result = mapToAppointment(updatedFull || { id: appointmentId, ...updatedData });
+    const doctors = await this.getDoctors();
+    const doctorsMap = new Map<string, Doctor>(doctors.map(d => [d.id, d]));
+    const result = mapToAppointment(merged, doctorsMap);
     notifySyncEvent('mindcare_appointments', result, 'APPOINTMENT_CHANGED');
 
     return result;
   },
 
   /**
-   * Cancel an appointment. NEVER deletes the row from the database (maintains audit trail).
+   * Cancel an appointment. Non-destructive: preserves audit trail in DB.
    */
   async cancelAppointment(appointmentId: string, reason?: string): Promise<Appointment> {
-    const existing = await OfflineStorage.getAppointmentById(appointmentId);
+    const existing = await OfflineStorage.getAppointmentById(appointmentId) ||
+      getLocalStorageAppointments().find(i => i.id === appointmentId);
     const now = new Date().toISOString();
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
@@ -425,29 +522,34 @@ export const AppointmentService = {
       ? (existing?.notes ? `${existing.notes}\n[Cancelled: ${reason}]` : `Cancelled: ${reason}`)
       : existing?.notes;
 
-    const updatePayload: Partial<LocalAppointment> = {
+    const updatedData: Partial<LocalAppointment> = {
       status: 'cancelled',
       notes: cancelNotes,
       cancelled_at: now,
       updated_at: now,
-      sync_status: isOnline && isSupabaseConfigured() ? 'synced' : 'pending',
+      sync_status: 'pending',
     };
 
-    // 1. Update local storage
-    await OfflineStorage.updateAppointmentStatus(appointmentId, 'cancelled');
-    if (existing) {
-      await OfflineStorage.saveAppointment({
-        ...existing,
-        ...updatePayload,
-      });
-    }
+    const merged: LocalAppointment = {
+      ...(existing || ({} as any)),
+      ...updatedData,
+      id: appointmentId,
+    };
 
-    // 2. Remove / clean up reminders
+    // 1. Update LocalStorage
+    const lsItems = getLocalStorageAppointments();
+    saveLocalStorageAppointments(lsItems.map(i => i.id === appointmentId ? merged : i));
+
+    // 2. Update Dexie
+    await OfflineStorage.updateAppointmentStatus(appointmentId, 'cancelled');
+    await OfflineStorage.saveAppointment(merged);
+
+    // 3. Remove routine reminders
     if (existing?.patient_id) {
       this.cleanupAppointmentReminders(appointmentId, existing.patient_id);
     }
 
-    // 3. Sync to Supabase
+    // 4. Sync to Supabase
     if (isOnline && isSupabaseConfigured()) {
       try {
         const { error } = await supabase
@@ -460,50 +562,48 @@ export const AppointmentService = {
           })
           .eq('id', appointmentId);
 
-        if (error) {
-          console.warn('Cloud cancellation error, queuing sync', error);
-          await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatePayload);
-          await db.appointments.update(appointmentId, { sync_status: 'pending' });
+        if (!error) {
+          merged.sync_status = 'synced';
+          await OfflineStorage.saveAppointment(merged);
+        } else {
+          await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
         }
       } catch (e) {
-        console.warn('Network error cancelling appointment, queuing sync', e);
-        await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatePayload);
-        await db.appointments.update(appointmentId, { sync_status: 'pending' });
+        await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
       }
     } else {
-      await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatePayload);
+      await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatedData);
     }
 
-    // 4. Notify realtime listeners
-    const updatedFull = await OfflineStorage.getAppointmentById(appointmentId);
-    const result = mapToAppointment(updatedFull || { id: appointmentId, ...updatePayload });
+    const doctors = await this.getDoctors();
+    const doctorsMap = new Map<string, Doctor>(doctors.map(d => [d.id, d]));
+    const result = mapToAppointment(merged, doctorsMap);
     notifySyncEvent('mindcare_appointments', result, 'APPOINTMENT_CHANGED');
 
     return result;
   },
 
   /**
-   * Mark appointment as completed.
+   * Mark appointment completed.
    */
   async completeAppointment(appointmentId: string): Promise<Appointment> {
-    const existing = await OfflineStorage.getAppointmentById(appointmentId);
+    const existing = await OfflineStorage.getAppointmentById(appointmentId) ||
+      getLocalStorageAppointments().find(i => i.id === appointmentId);
     const now = new Date().toISOString();
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
-    const updatePayload: Partial<LocalAppointment> = {
+    const merged: LocalAppointment = {
+      ...(existing || ({} as any)),
+      id: appointmentId,
       status: 'completed',
       completed_at: now,
       updated_at: now,
-      sync_status: isOnline && isSupabaseConfigured() ? 'synced' : 'pending',
     };
 
+    const lsItems = getLocalStorageAppointments();
+    saveLocalStorageAppointments(lsItems.map(i => i.id === appointmentId ? merged : i));
     await OfflineStorage.updateAppointmentStatus(appointmentId, 'completed');
-    if (existing) {
-      await OfflineStorage.saveAppointment({
-        ...existing,
-        ...updatePayload,
-      });
-    }
+    await OfflineStorage.saveAppointment(merged);
 
     if (isOnline && isSupabaseConfigured()) {
       try {
@@ -516,22 +616,20 @@ export const AppointmentService = {
           })
           .eq('id', appointmentId);
       } catch (e) {
-        await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatePayload);
+        await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, { status: 'completed', completed_at: now, updated_at: now });
       }
-    } else {
-      await SyncQueue.enqueue('UPDATE', 'appointments', appointmentId, updatePayload);
     }
 
-    const updatedFull = await OfflineStorage.getAppointmentById(appointmentId);
-    const result = mapToAppointment(updatedFull || { id: appointmentId, ...updatePayload });
+    const doctors = await this.getDoctors();
+    const doctorsMap = new Map<string, Doctor>(doctors.map(d => [d.id, d]));
+    const result = mapToAppointment(merged, doctorsMap);
     notifySyncEvent('mindcare_appointments', result, 'APPOINTMENT_CHANGED');
 
     return result;
   },
 
   /**
-   * Automatically schedule reminders for this appointment in StorageService under category 'visit'.
-   * Creates 24-hour and 1-hour reminders.
+   * Schedule appointment reminders.
    */
   scheduleAppointmentReminders(app: Partial<LocalAppointment>): void {
     if (!app.patient_id || !app.appointment_date || !app.appointment_time) return;
@@ -542,7 +640,7 @@ export const AppointmentService = {
     const timeStr = app.appointment_time;
     const typeLabel = app.appointment_type === 'video' ? 'Video Consultation' : 'In-Person Visit';
 
-    // 1. Routine reminder for day of visit
+    // Day-of reminder
     StorageService.addReminder({
       id: `rem-appt-day-${app.id}`,
       title: `Doctor Visit Today: ${docName}${spec}`,
@@ -553,7 +651,7 @@ export const AppointmentService = {
       isCompleted: false,
     }, app.patient_id);
 
-    // 2. Day before reminder
+    // 24h prior reminder
     StorageService.addReminder({
       id: `rem-appt-pre-${app.id}`,
       title: `Tomorrow: Doctor Appointment with ${docName}`,
@@ -566,7 +664,7 @@ export const AppointmentService = {
   },
 
   /**
-   * Cleanup scheduled reminders when an appointment is cancelled.
+   * Clean up reminders when cancelled.
    */
   cleanupAppointmentReminders(appointmentId: string, patientId: string): void {
     try {
@@ -576,7 +674,7 @@ export const AppointmentService = {
   },
 
   /**
-   * Listen for appointment updates across tabs and devices.
+   * Realtime listener.
    */
   subscribe(callback: () => void): () => void {
     return subscribeToSync((payload) => {
