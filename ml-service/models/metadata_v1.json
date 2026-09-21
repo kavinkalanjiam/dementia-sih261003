@@ -1,0 +1,94 @@
+{
+  "model_version": "siroi-cognitive-v1",
+  "prediction_horizon_days": 180,
+  "features": [
+    "accuracy_mean",
+    "accuracy_last_5",
+    "accuracy_last_10",
+    "accuracy_30d",
+    "accuracy_slope_30d",
+    "accuracy_std",
+    "score_mean",
+    "average_duration",
+    "completion_rate",
+    "games_per_week",
+    "current_difficulty",
+    "age",
+    "education_years"
+  ],
+  "category_labels": [
+    "cognitively_unimpaired",
+    "mild_cognitive_impairment",
+    "dementia"
+  ],
+  "trajectory_labels": [
+    "stable",
+    "improving",
+    "declining"
+  ],
+  "metrics": {
+    "category_model": {
+      "model_name": "Calibrated Random Forest",
+      "accuracy": 0.9032,
+      "balanced_accuracy": 0.8753,
+      "precision_macro": 0.883,
+      "recall_macro": 0.8753,
+      "f1_macro": 0.8785,
+      "confusion_matrix": [
+        [
+          124,
+          4,
+          0
+        ],
+        [
+          4,
+          60,
+          6
+        ],
+        [
+          0,
+          10,
+          40
+        ]
+      ],
+      "labels": [
+        "cognitively_unimpaired",
+        "mild_cognitive_impairment",
+        "dementia"
+      ],
+      "roc_auc_ovr": null
+    },
+    "trajectory_model": {
+      "model_name": "Trajectory Random Forest",
+      "accuracy": 0.9839,
+      "balanced_accuracy": 0.9851,
+      "precision_macro": 0.98,
+      "recall_macro": 0.9851,
+      "f1_macro": 0.9824,
+      "confusion_matrix": [
+        [
+          107,
+          3,
+          0
+        ],
+        [
+          1,
+          56,
+          0
+        ],
+        [
+          0,
+          0,
+          81
+        ]
+      ],
+      "labels": [
+        "stable",
+        "improving",
+        "declining"
+      ],
+      "roc_auc_ovr": null
+    }
+  },
+  "disclaimer": "SIROI decision-support research estimate. Not a medical diagnosis."
+}

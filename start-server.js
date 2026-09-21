@@ -53,9 +53,18 @@ function startTunnel() {
   });
 }
 
+console.log('🧠 Starting SIROI Python ML Cognitive Analysis Service...');
+const mlDir = path.resolve('ml-service');
+const mlProcess = spawn('py', ['-3.13', '-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'], {
+  cwd: mlDir,
+  stdio: 'inherit',
+  shell: true,
+});
+
 setTimeout(startTunnel, 2000);
 
 process.on('SIGINT', () => {
-  viteProcess.kill();
+  try { viteProcess.kill(); } catch {}
+  try { mlProcess.kill(); } catch {}
   process.exit();
 });

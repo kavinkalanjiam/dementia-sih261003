@@ -13,6 +13,55 @@ interface FamiliarPlacesGameProps {
   onBack: () => void;
 }
 
+export const DEFAULT_SAMPLE_PLACES: FamiliarPlace[] = [
+  {
+    id: 'sample-fplace-1',
+    name: 'Living Room',
+    description: 'Where the family gathers in the evenings with warm tea',
+    photoUrl: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'sample-fplace-2',
+    name: 'Flower Garden',
+    description: 'The peaceful backyard with fresh roses and morning sunshine',
+    photoUrl: 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'sample-fplace-3',
+    name: 'Kitchen',
+    description: 'Where warm breakfasts and family recipes are prepared',
+    photoUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'sample-fplace-4',
+    name: 'Neighborhood Clinic',
+    description: 'Dr. Barua’s health center down the street',
+    photoUrl: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=600&q=80',
+  },
+];
+
+export const sanitizeAndDeduplicatePlaces = (list: FamiliarPlace[]): FamiliarPlace[] => {
+  const filtered = (list || [])
+    .filter(p => p && p.name && p.name.trim() !== '' && p.id !== 'fplace-1' && p.id !== 'fplace-2' && p.id !== 'fplace-3');
+
+  const seen = new Set<string>();
+  const uniquePlaces: FamiliarPlace[] = [];
+  for (const p of filtered) {
+    const norm = p.name.trim().toLowerCase();
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      uniquePlaces.push({
+        ...p,
+        name: p.name.trim(),
+        description: (p.description || '').trim(),
+        photoUrl: (p.photoUrl || '').trim(),
+      });
+    }
+  }
+
+  return uniquePlaces.length > 0 ? uniquePlaces : DEFAULT_SAMPLE_PLACES;
+};
+
 export const FamiliarPlacesGame: React.FC<FamiliarPlacesGameProps> = ({ onBack }) => {
   const { language, t } = useI18n();
   const { user, role } = useAuth();
@@ -21,9 +70,17 @@ export const FamiliarPlacesGame: React.FC<FamiliarPlacesGameProps> = ({ onBack }
     StorageService.getActivePatientId(user?.id) ||
     (user?.id && user.role !== 'caregiver' ? user.id : undefined);
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const targetId = activePatientId || StorageService.getActivePatientId(user?.id) || user?.id;
+
+  // Instant local-first initialization: 0ms delay, no blocking cloud fetch
+  const initialPlaces = useMemo(() => {
+    const local = StorageService.getFamiliarPlaces(targetId);
+    return sanitizeAndDeduplicatePlaces(local);
+  }, [targetId]);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [level, setLevel] = useState<number>(2); // Level 1-4
-  const [places, setPlaces] = useState<FamiliarPlace[]>([]);
+  const [places, setPlaces] = useState<FamiliarPlace[]>(initialPlaces);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [scoreCount, setScoreCount] = useState<number>(0);
@@ -34,57 +91,31 @@ export const FamiliarPlacesGame: React.FC<FamiliarPlacesGameProps> = ({ onBack }
     TextToSpeechService.speak(text, language);
   };
 
+  // Background non-blocking sync with cloud to pick up newly added places
   useEffect(() => {
     let isMounted = true;
 
-    const loadPlaces = async () => {
-      setIsLoading(true);
+    const syncCloudPlaces = async () => {
       try {
-        const targetId = activePatientId || StorageService.getActivePatientId(user?.id) || user?.id;
-        let list: FamiliarPlace[] = await StorageService.fetchFamiliarPlacesFromCloud(targetId);
-        if (!list || list.length === 0) {
-          list = StorageService.getFamiliarPlaces(targetId);
-        }
+        const cloudList = await Promise.race([
+          StorageService.fetchFamiliarPlacesFromCloud(targetId),
+          new Promise<FamiliarPlace[]>((res) => setTimeout(() => res([]), 2000)),
+        ]);
 
-        // Keep only valid entries created for this patient, filtering out legacy demo IDs
-        const filtered = (list || [])
-          .filter(p => p && p.name && p.name.trim() !== '' && p.id !== 'fplace-1' && p.id !== 'fplace-2' && p.id !== 'fplace-3');
-
-        // Deduplicate by name
-        const seen = new Set<string>();
-        const uniquePlaces: FamiliarPlace[] = [];
-        for (const p of filtered) {
-          const norm = p.name.trim().toLowerCase();
-          if (!seen.has(norm)) {
-            seen.add(norm);
-            uniquePlaces.push({
-              ...p,
-              name: p.name.trim(),
-              description: (p.description || '').trim(),
-              photoUrl: (p.photoUrl || '').trim(),
-            });
+        if (isMounted && cloudList && cloudList.length > 0) {
+          const fresh = sanitizeAndDeduplicatePlaces(cloudList);
+          if (fresh.length > 0) {
+            setPlaces(fresh);
           }
         }
-
-        if (isMounted) {
-          setPlaces(uniquePlaces);
-          setCurrentIndex(0);
-          setGameOver(false);
-          setCompletionData(null);
-          setIsLoading(false);
-        }
       } catch (err) {
-        console.warn('Error loading familiar places from profile:', err);
-        if (isMounted) {
-          setPlaces([]);
-          setIsLoading(false);
-        }
+        console.warn('Background sync error in FamiliarPlacesGame:', err);
       }
     };
 
-    loadPlaces();
+    syncCloudPlaces();
     return () => { isMounted = false; };
-  }, [activePatientId]);
+  }, [targetId]);
 
   const currentPlace = places[currentIndex];
 

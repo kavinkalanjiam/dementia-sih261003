@@ -7,6 +7,7 @@ import {
   LocalRoutine,
   LocalAlert,
   LocalCognitiveProfile,
+  LocalMLPrediction,
   getDeviceId,
 } from './db';
 import { SyncQueue } from './syncQueue';
@@ -363,4 +364,26 @@ export const OfflineStorage = {
   async getAllProfiles(): Promise<LocalProfile[]> {
     return await db.profiles.toArray();
   },
+
+  // ── Machine Learning Cognitive Predictions ─────────────────
+  async saveMLPrediction(pred: LocalMLPrediction): Promise<LocalMLPrediction> {
+    await db.mlPredictions.put(pred);
+    return pred;
+  },
+
+  async getLatestMLPrediction(patientId: string): Promise<LocalMLPrediction | undefined> {
+    const list = await db.mlPredictions.where('patient_id').equals(patientId).toArray();
+    if (!list || list.length === 0) return undefined;
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return list[0];
+  },
+
+  async getMLPredictionsForPatient(patientId: string): Promise<LocalMLPrediction[]> {
+    const list = await db.mlPredictions.where('patient_id').equals(patientId).toArray();
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
 };
+
+export const saveMLPrediction = (pred: LocalMLPrediction) => OfflineStorage.saveMLPrediction(pred);
+export const getLatestMLPrediction = (patientId: string) => OfflineStorage.getLatestMLPrediction(patientId);
+export const getMLPredictionsForPatient = (patientId: string) => OfflineStorage.getMLPredictionsForPatient(patientId);

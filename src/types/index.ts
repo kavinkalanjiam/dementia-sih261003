@@ -307,3 +307,58 @@ export interface SOSAlert {
   timestamp: number;
   status: SOSStatus;
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * MACHINE LEARNING COGNITIVE ANALYSIS & LONGITUDINAL PREDICTION
+ * ───────────────────────────────────────────────────────────── */
+
+export type MLCognitiveCategory = 'cognitively_unimpaired' | 'mild_cognitive_impairment' | 'dementia' | 'insufficient_data';
+export type MLTrajectory = 'stable' | 'improving' | 'declining' | 'insufficient_data';
+
+export interface MLCategoryProbabilities {
+  cognitively_unimpaired: number;
+  mild_cognitive_impairment: number;
+  dementia: number;
+}
+
+export interface MLFeatureExplanation {
+  featureName: string;
+  description: string;
+  impactDirection: 'positive' | 'negative' | 'neutral';
+  relativeContribution: number; // e.g. 0.0 to 1.0
+}
+
+export interface MLFeatureSnapshot {
+  totalSessions: number;
+  accuracyLast5: number | null;
+  accuracyLast10: number | null;
+  accuracy7d: number | null;
+  accuracy30d: number | null;
+  accuracySlope30d: number | null;
+  scoreSlope: number | null;
+  accuracyMean: number | null;
+  accuracyStd: number | null;
+  averageDurationSeconds: number | null;
+  durationTrend: string | null;
+  currentDifficulty: number;
+  gamesPerWeek: number;
+  dominantCategoryAccuracy?: Record<string, number>;
+}
+
+export interface MLCognitivePrediction {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  modelVersion: string;
+  predictionType: string;
+  predictedCategory: MLCognitiveCategory;
+  trajectory: MLTrajectory;
+  predictionHorizonDays: number; // e.g. 180 days (6 months)
+  confidence: number;
+  categoryProbabilities: MLCategoryProbabilities;
+  featuresSnapshot: MLFeatureSnapshot;
+  explanation: MLFeatureExplanation[];
+  insufficientDataReason?: string;
+  createdAt: string;
+  updatedAt?: string;
+}

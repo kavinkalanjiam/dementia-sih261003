@@ -6,6 +6,7 @@ import { GamificationService } from '../services/gamification';
 import { AlertEngineService, playEmergencyAlarmSound } from '../services/alertEngine';
 import { OfflineStorage } from '../offline/offlineStorage';
 import { ProgressChart } from '../components/ProgressChart';
+import { CognitiveAnalysisCard } from '../components/CognitiveAnalysisCard';
 import { subscribeToSync } from '../services/realtime';
 import { useI18n } from '../i18n';
 import {
@@ -685,6 +686,14 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
           ))}
         </div>
       </div>
+
+      {/* ── MACHINE LEARNING COGNITIVE ANALYSIS & LONGITUDINAL PREDICTION ── */}
+      <CognitiveAnalysisCard
+        patientId={patient.id || 'pat-demo-1'}
+        patientName={patient.basicInfo.name}
+        patientAge={patient.basicInfo.age}
+        sessions={sessions}
+      />
 
       {/* ── AI CARE INSIGHTS ───────────────────────────────────────── */}
       <div className="bg-[#F4EBD7] border border-[#E4DED4] rounded-3xl p-6 shadow-sm space-y-4">

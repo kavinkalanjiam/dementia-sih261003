@@ -118,6 +118,24 @@ export interface AppMetadata {
   value: any;
 }
 
+export interface LocalMLPrediction {
+  id: string;
+  patient_id: string;
+  patient_name?: string;
+  model_version: string;
+  prediction_type: string;
+  predicted_category: string;
+  trajectory: string;
+  prediction_horizon_days: number;
+  confidence: number;
+  category_probabilities?: any;
+  features_snapshot?: any;
+  explanation?: any;
+  insufficient_data_reason?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
 export class MindCareDatabase extends Dexie {
   patients!: Table<LocalPatient, string>;
   profiles!: Table<LocalProfile, string>;
@@ -126,6 +144,7 @@ export class MindCareDatabase extends Dexie {
   routines!: Table<LocalRoutine, string>;
   alerts!: Table<LocalAlert, string>;
   cognitiveProfiles!: Table<LocalCognitiveProfile, string>;
+  mlPredictions!: Table<LocalMLPrediction, string>;
   syncQueue!: Table<SyncQueueItem, string>;
   appMetadata!: Table<AppMetadata, string>;
 
@@ -144,6 +163,10 @@ export class MindCareDatabase extends Dexie {
 
     this.version(2).stores({
       profiles: 'id, full_name, email, phone, phone_number, relationship, caregiving_relationship, role, preferred_language, updated_at',
+    });
+
+    this.version(3).stores({
+      mlPredictions: 'id, patient_id, model_version, predicted_category, trajectory, created_at',
     });
   }
 }

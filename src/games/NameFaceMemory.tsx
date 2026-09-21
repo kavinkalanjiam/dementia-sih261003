@@ -12,6 +12,59 @@ interface NameFaceMemoryProps {
   onBack: () => void;
 }
 
+export const DEFAULT_SAMPLE_PEOPLE: FamiliarPerson[] = [
+  {
+    id: 'sample-fp-1',
+    name: 'Anitha',
+    relationship: 'Daughter',
+    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+    notes: 'Loves gardening and visits every morning',
+  },
+  {
+    id: 'sample-fp-2',
+    name: 'Rahul',
+    relationship: 'Son',
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+    notes: 'Engineer, calls every Sunday afternoon',
+  },
+  {
+    id: 'sample-fp-3',
+    name: 'Priya',
+    relationship: 'Granddaughter',
+    photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
+    notes: 'Plays the guitar and brings flowers',
+  },
+  {
+    id: 'sample-fp-4',
+    name: 'Dr. P. Barua',
+    relationship: 'Family Doctor',
+    photoUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
+    notes: 'Friendly doctor from the neighborhood clinic',
+  },
+];
+
+export const sanitizeAndDeduplicatePeople = (list: FamiliarPerson[]): FamiliarPerson[] => {
+  const filtered = (list || [])
+    .filter(p => p && p.name && p.name.trim() !== '' && p.id !== 'fp-1' && p.id !== 'fp-2' && p.id !== 'fp-3');
+
+  const seen = new Set<string>();
+  const uniquePeople: FamiliarPerson[] = [];
+  for (const p of filtered) {
+    const norm = p.name.trim().toLowerCase();
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      uniquePeople.push({
+        ...p,
+        name: p.name.trim(),
+        relationship: (p.relationship || '').trim(),
+        photoUrl: (p.photoUrl || '').trim(),
+      });
+    }
+  }
+
+  return uniquePeople.length > 0 ? uniquePeople : DEFAULT_SAMPLE_PEOPLE;
+};
+
 export const NameFaceMemory: React.FC<NameFaceMemoryProps> = ({ onBack }) => {
   const { language, t } = useI18n();
   const { user, role } = useAuth();
@@ -20,8 +73,16 @@ export const NameFaceMemory: React.FC<NameFaceMemoryProps> = ({ onBack }) => {
     StorageService.getActivePatientId(user?.id) ||
     (user?.id && user.role !== 'caregiver' ? user.id : undefined);
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [people, setPeople] = useState<FamiliarPerson[]>([]);
+  const targetId = activePatientId || StorageService.getActivePatientId(user?.id) || user?.id;
+
+  // Instant local-first initialization: 0ms delay, no blocking cloud fetch
+  const initialPeople = useMemo(() => {
+    const local = StorageService.getFamiliarPeople(targetId);
+    return sanitizeAndDeduplicatePeople(local);
+  }, [targetId]);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [people, setPeople] = useState<FamiliarPerson[]>(initialPeople);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -33,79 +94,56 @@ export const NameFaceMemory: React.FC<NameFaceMemoryProps> = ({ onBack }) => {
     TextToSpeechService.speak(text, language);
   };
 
+  // Background non-blocking sync with cloud to pick up newly added family members
   useEffect(() => {
     let isMounted = true;
 
-    const loadPeople = async () => {
-      setIsLoading(true);
+    const syncCloudPeople = async () => {
       try {
-        const targetId = activePatientId || StorageService.getActivePatientId(user?.id) || user?.id;
-        let list: FamiliarPerson[] = await StorageService.fetchFamiliarPeopleFromCloud(targetId);
-        if (!list || list.length === 0) {
-          list = StorageService.getFamiliarPeople(targetId);
-        }
+        const cloudList = await Promise.race([
+          StorageService.fetchFamiliarPeopleFromCloud(targetId),
+          new Promise<FamiliarPerson[]>((res) => setTimeout(() => res([]), 2000)),
+        ]);
 
-        // Keep only valid entries created for this patient, filtering out legacy demo IDs
-        const filtered = (list || [])
-          .filter(p => p && p.name && p.name.trim() !== '' && p.id !== 'fp-1' && p.id !== 'fp-2' && p.id !== 'fp-3');
-
-        // Deduplicate by name
-        const seen = new Set<string>();
-        const uniquePeople: FamiliarPerson[] = [];
-        for (const p of filtered) {
-          const norm = p.name.trim().toLowerCase();
-          if (!seen.has(norm)) {
-            seen.add(norm);
-            uniquePeople.push({
-              ...p,
-              name: p.name.trim(),
-              relationship: (p.relationship || '').trim(),
-              photoUrl: (p.photoUrl || '').trim(),
-            });
-          }
-        }
-
-        if (isMounted) {
-          setPeople(uniquePeople);
-          setCurrentIndex(0);
-          setGameOver(false);
-          setSessionResult(null);
-          setIsLoading(false);
-
-          if (uniquePeople.length > 0) {
-            let askMsg = 'Who is this family member? Select the correct name.';
-            if (language === 'kha') {
-              askMsg = 'Uei lane kaei kane ka baha-ïing? Jied ïa ka kyrteng ba dei.';
-            } else if (language === 'as') {
-              askMsg = 'এইজন পৰিয়ালৰ সদস্য কোন হয়? সঠিক নাম বাছক।';
-            } else if (language === 'bn') {
-              askMsg = 'ইনি পরিবারের কোন সদস্য? সঠিক নাম নির্বাচন করুন।';
-            } else if (language === 'ne') {
-              askMsg = 'यो परिवारको सदस्य को हुनुहुन्छ? सही नाम छान्नुहोस्।';
-            } else if (language === 'ny') {
-              askMsg = 'Si nyi hii kon dwnam? Naam sahi basika.';
-            } else if (language === 'mni') {
-              askMsg = 'ইমুংগী মীওই অসি কনানো? অচুম্বা মমিং খনগৎলু।';
-            } else if (language === 'lus') {
-              askMsg = 'He chhungte hi khawi ngei ngei nge? A hming dik zawk thlang rawh.';
-            } else if (language === 'nag') {
-              askMsg = 'Etu ghar manu kon ase? Sahi naam chunibi.';
-            }
-            speakInLang(askMsg);
+        if (isMounted && cloudList && cloudList.length > 0) {
+          const fresh = sanitizeAndDeduplicatePeople(cloudList);
+          if (fresh.length > 0) {
+            setPeople(fresh);
           }
         }
       } catch (err) {
-        console.warn('Error loading family members from profile:', err);
-        if (isMounted) {
-          setPeople([]);
-          setIsLoading(false);
-        }
+        console.warn('Background sync error in NameFaceMemory:', err);
       }
     };
 
-    loadPeople();
+    syncCloudPeople();
     return () => { isMounted = false; };
-  }, [language, activePatientId]);
+  }, [targetId]);
+
+  // Voice announcement of question
+  useEffect(() => {
+    if (people.length > 0 && !gameOver && selectedAnswer === null) {
+      let askMsg = 'Who is this family member? Select the correct name.';
+      if (language === 'kha') {
+        askMsg = 'Uei lane kaei kane ka baha-ïing? Jied ïa ka kyrteng ba dei.';
+      } else if (language === 'as') {
+        askMsg = 'এইজন পৰিয়ালৰ সদস্য কোন হয়? সঠিক নাম বাছক।';
+      } else if (language === 'bn') {
+        askMsg = 'ইনি পরিবারের কোন সদস্য? সঠিক নাম নির্বাচন করুন।';
+      } else if (language === 'ne') {
+        askMsg = 'यो परिवारको सदस्य को हुनुहुन्छ? सही नाम छान्नुहोस्।';
+      } else if (language === 'ny') {
+        askMsg = 'Si nyi hii kon dwnam? Naam sahi basika.';
+      } else if (language === 'mni') {
+        askMsg = 'ইমুংগী মীওই অসি কনানো? অচুম্বা মমিং খনগৎলু।';
+      } else if (language === 'lus') {
+        askMsg = 'He chhungte hi khawi ngei ngei nge? A hming dik zawk thlang rawh.';
+      } else if (language === 'nag') {
+        askMsg = 'Etu ghar manu kon ase? Sahi naam chunibi.';
+      }
+      speakInLang(askMsg);
+    }
+  }, [currentIndex, language]);
 
   const currentPerson = people[currentIndex];
 

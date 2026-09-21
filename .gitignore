@@ -26,3 +26,10 @@ dist-ssr
 # Environment variables
 .env
 .env*.local
+
+# Binaries & Caches
+cloudflared.exe
+__pycache__/
+*.pyc
+.pytest_cache/
+*.tsbuildinfo
