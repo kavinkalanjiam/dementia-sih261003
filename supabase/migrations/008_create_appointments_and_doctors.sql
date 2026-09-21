@@ -1,10 +1,19 @@
 -- ==============================================================================
 -- SIROI — Doctor Appointment Booking & Doctors Schema Migration
 -- Migration 008: Adds doctors and appointments tables with strict RLS and Realtime
--- Compatible with TEXT and UUID primary keys for public.patients(id)
+-- Self-contained: includes handle_updated_at() and supports TEXT/UUID patient IDs
 -- ==============================================================================
 
--- 1. Doctors Directory Table
+-- 1. Automatic Timestamp Function
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Doctors Directory Table
 CREATE TABLE IF NOT EXISTS public.doctors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -17,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.doctors (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 2. Appointments Table (patient_id is TEXT to match public.patients.id)
+-- 3. Appointments Table (patient_id is TEXT to match public.patients.id)
 CREATE TABLE IF NOT EXISTS public.appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id TEXT NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
@@ -37,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 3. Indexes for Efficient Query Performance
+-- 4. Indexes for Efficient Query Performance
 CREATE INDEX IF NOT EXISTS idx_appointments_patient ON public.appointments(patient_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_caregiver ON public.appointments(caregiver_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON public.appointments(doctor_id);
@@ -45,16 +54,18 @@ CREATE INDEX IF NOT EXISTS idx_appointments_date ON public.appointments(appointm
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON public.appointments(status);
 CREATE INDEX IF NOT EXISTS idx_doctors_specialization ON public.doctors(specialization);
 
--- 4. Automatic Timestamp Update Triggers
-CREATE OR REPLACE TRIGGER tr_doctors_updated_at
+-- 5. Automatic Timestamp Update Triggers
+DROP TRIGGER IF EXISTS tr_doctors_updated_at ON public.doctors;
+CREATE TRIGGER tr_doctors_updated_at
   BEFORE UPDATE ON public.doctors
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-CREATE OR REPLACE TRIGGER tr_appointments_updated_at
+DROP TRIGGER IF EXISTS tr_appointments_updated_at ON public.appointments;
+CREATE TRIGGER tr_appointments_updated_at
   BEFORE UPDATE ON public.appointments
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 5. Helper Authorization Functions Supporting TEXT and UUID Patient IDs
+-- 6. Helper Authorization Functions Supporting TEXT and UUID Patient IDs
 CREATE OR REPLACE FUNCTION public.is_caregiver_for_patient(target_patient_id TEXT)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -78,7 +89,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- 6. Row Level Security (RLS)
+-- 7. Row Level Security (RLS)
 ALTER TABLE public.doctors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 
@@ -124,7 +135,7 @@ CREATE POLICY "Caregivers can update appointments for authorized patients"
   USING (public.is_caregiver_for_patient(patient_id))
   WITH CHECK (public.is_caregiver_for_patient(patient_id));
 
--- 7. Enable Realtime Publications for Live Cross-Device Sync
+-- 8. Enable Realtime Publications for Live Cross-Device Sync
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -137,7 +148,7 @@ BEGIN
   END IF;
 END $$;
 
--- 8. Seed Initial Healthcare Providers (North Eastern Regional Medical Network)
+-- 9. Seed Initial Healthcare Providers (North Eastern Regional Medical Network)
 INSERT INTO public.doctors (id, name, specialization, hospital, phone, consultation_type, available)
 VALUES
   ('d0c10001-0000-0000-0000-000000000001', 'Dr. P. Barua', 'Neurology & Cognitive Health', 'Guwahati Medical College & Hospital (GMCH)', '+91 94350 12345', 'both', true),
