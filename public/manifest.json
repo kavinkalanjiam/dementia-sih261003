@@ -1,0 +1,19 @@
+{
+  "name": "SIROI - Cognitive Gaming & Memory Assistance",
+  "short_name": "SIROI",
+  "description": "AI-based cognitive gaming and memory assistance platform for dementia care in the North Eastern Region.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAF9F4",
+  "theme_color": "#176B61",
+  "icons": [
+    {
+      "src": "/images/flower_logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
