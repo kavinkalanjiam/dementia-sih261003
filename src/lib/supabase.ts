@@ -10,6 +10,10 @@ const normalizeSupabaseUrl = (inputUrl: string): string => {
   return cleaned;
 };
 
+const DEFAULT_SUPABASE_URL = 'https://oxvgkfaserkgddbbfkcm.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94dmdrZmFzZXJrZ2RkYmJma2NtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMTAxNjUsImV4cCI6MjEwNDY4NjE2NX0.8Z4wI9okDp7nLz-YxM9PK7Xubt77-QdxM00yjGGIFkg';
+
 // Retrieve credentials from environment variables or runtime configuration
 export const getSupabaseUrl = (): string => {
   if (typeof window !== 'undefined') {
@@ -18,7 +22,7 @@ export const getSupabaseUrl = (): string => {
       return normalizeSupabaseUrl(runtimeUrl);
     }
   }
-  return normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || '');
+  return normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
 };
 
 export const getSupabaseAnonKey = (): string => {
@@ -28,7 +32,7 @@ export const getSupabaseAnonKey = (): string => {
       return runtimeKey.trim();
     }
   }
-  return (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  return (import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY).trim();
 };
 
 // Check if credentials are authentic and configured
