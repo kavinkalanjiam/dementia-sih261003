@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const CHANNEL_NAME = 'mindcare_realtime_sync_channel';
 
-export type SyncEventType = 'UPDATE' | 'REMINDER_ADDED' | 'GAME_COMPLETED' | 'DEVICE_CONNECTED' | 'ACCURACY_ALERT_CHANGED';
+export type SyncEventType = 'UPDATE' | 'REMINDER_ADDED' | 'GAME_COMPLETED' | 'DEVICE_CONNECTED' | 'ACCURACY_ALERT_CHANGED' | 'APPOINTMENT_CHANGED';
 
 export interface SyncPayload {
   key: string;
@@ -177,6 +177,19 @@ export function initSupabaseRealtime() {
             data: change.new,
             timestamp: Date.now(),
             type: 'UPDATE',
+          });
+        }
+      )
+      // Realtime doctor appointments (Multi-Caregiver synchronization)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments' },
+        (change: any) => {
+          handleIncomingPayload({
+            key: 'mindcare_appointments',
+            data: change.new || change.old,
+            timestamp: Date.now(),
+            type: 'APPOINTMENT_CHANGED',
           });
         }
       )

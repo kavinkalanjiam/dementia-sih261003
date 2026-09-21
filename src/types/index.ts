@@ -362,3 +362,51 @@ export interface MLCognitivePrediction {
   createdAt: string;
   updatedAt?: string;
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * DOCTOR APPOINTMENT BOOKING
+ * ───────────────────────────────────────────────────────────── */
+
+export type AppointmentStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'rescheduled'
+  | 'completed'
+  | 'cancelled';
+
+export type AppointmentType = 'in_person' | 'video';
+
+export interface Doctor {
+  id: string;
+  name: string;
+  specialization: string;
+  hospital?: string;
+  phone?: string;
+  consultationType: 'in_person' | 'video' | 'both';
+  available: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Appointment {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  caregiverId: string;
+  caregiverName?: string;
+  doctorId: string;
+  doctor?: Doctor;
+  appointmentDate: string; // YYYY-MM-DD
+  appointmentTime: string; // HH:MM or HH:MM AM/PM
+  appointmentType: AppointmentType;
+  reason?: string;
+  notes?: string;
+  status: AppointmentStatus;
+  hospital?: string;
+  meetingLink?: string;
+  cancelledAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  syncStatus?: 'synced' | 'pending' | 'failed';
+}

@@ -136,6 +136,43 @@ export interface LocalMLPrediction {
   updated_at?: string;
 }
 
+export interface LocalDoctor {
+  id: string;
+  name: string;
+  specialization: string;
+  hospital?: string;
+  phone?: string;
+  consultation_type: string;
+  available: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LocalAppointment {
+  id: string;
+  patient_id: string;
+  patient_name?: string;
+  caregiver_id: string;
+  caregiver_name?: string;
+  doctor_id: string;
+  doctor_name?: string;
+  doctor_specialization?: string;
+  specialization?: string;
+  appointment_date: string;
+  appointment_time: string;
+  appointment_type: 'in_person' | 'video';
+  reason?: string;
+  notes?: string;
+  status: 'pending' | 'confirmed' | 'rescheduled' | 'completed' | 'cancelled';
+  hospital?: string;
+  meeting_link?: string;
+  cancelled_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+}
+
 export class MindCareDatabase extends Dexie {
   patients!: Table<LocalPatient, string>;
   profiles!: Table<LocalProfile, string>;
@@ -145,6 +182,8 @@ export class MindCareDatabase extends Dexie {
   alerts!: Table<LocalAlert, string>;
   cognitiveProfiles!: Table<LocalCognitiveProfile, string>;
   mlPredictions!: Table<LocalMLPrediction, string>;
+  appointments!: Table<LocalAppointment, string>;
+  doctors!: Table<LocalDoctor, string>;
   syncQueue!: Table<SyncQueueItem, string>;
   appMetadata!: Table<AppMetadata, string>;
 
@@ -167,6 +206,11 @@ export class MindCareDatabase extends Dexie {
 
     this.version(3).stores({
       mlPredictions: 'id, patient_id, model_version, predicted_category, trajectory, created_at',
+    });
+
+    this.version(4).stores({
+      appointments: 'id, patient_id, caregiver_id, doctor_id, appointment_date, appointment_time, status, updated_at',
+      doctors: 'id, name, specialization, available, updated_at',
     });
   }
 }

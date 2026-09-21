@@ -16,6 +16,7 @@ import {
   X,
   Brain,
   Heart,
+  Calendar,
 } from 'lucide-react';
 import { SiroiLilyLogo } from './SiroiBotanical';
 
@@ -86,6 +87,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       aliases: ['family-places', '/caregiver/family-places'],
       label: t('nav.familyPlaces') || 'Family & Places',
       icon: Heart,
+    },
+    {
+      id: 'appointments',
+      aliases: ['appointments', '/caregiver/appointments'],
+      label: 'Appointments',
+      icon: Calendar,
     },
     {
       id: 'analytics',

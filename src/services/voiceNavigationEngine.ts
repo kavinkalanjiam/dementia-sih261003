@@ -18,6 +18,7 @@ export type NavigationIntent =
   | 'OPEN_ROUTINE'
   | 'OPEN_HELP'
   | 'OPEN_SETTINGS'
+  | 'OPEN_APPOINTMENTS'
   | 'TRIGGER_SOS'
   | 'AMBIGUOUS_GAME_PROMPT'
   | 'UNKNOWN';
@@ -45,6 +46,7 @@ export const NAVIGATION_ROUTES: Record<Exclude<NavigationIntent, 'UNKNOWN' | 'AM
   OPEN_ROUTINE: { tab: 'reminders' },
   OPEN_HELP: { tab: 'assistant' },
   OPEN_SETTINGS: { tab: 'settings' },
+  OPEN_APPOINTMENTS: { tab: 'appointments' },
   TRIGGER_SOS: { tab: 'home' },
 };
 
@@ -81,6 +83,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['open routine', 'show today\'s routine', 'what do i have today', 'show my routine', 'reminders', 'schedule', 'today schedule'],
     OPEN_HELP: ['open help', 'i need help', 'show help', 'emergency help', 'sos help'],
     OPEN_SETTINGS: ['open settings', 'show settings', 'preferences', 'configuration'],
+    OPEN_APPOINTMENTS: ['open appointments', 'show appointments', 'doctor appointments', 'my appointments', 'book doctor', 'schedule appointment', 'show my appointments', 'doctor visit', 'appointments'],
     TRIGGER_SOS: ['send sos', 'send sos signal', 'sos', 'trigger sos', 'emergency', 'send emergency alert', 'emergency signal', 'call emergency', 'sos signal', 'send help', 'i need urgent help', 'help me emergency'],
   },
 
@@ -101,6 +104,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['আজিৰ ৰুটিন', 'সোঁৱৰণী চাওক', 'মোৰ ৰুটিন', 'দৈনিক সূচী'],
     OPEN_HELP: ['মোক সহায় লাগে', 'সহায়', 'জৰুৰী সহায়'],
     OPEN_SETTINGS: ['ছেটিংছ', 'পছন্দসমূহ'],
+    OPEN_APPOINTMENTS: ['ডাক্তাৰৰ সাক্ষাৎ', 'এপইণ্টমেণ্ট', 'ডাক্তাৰৰ এপইণ্টমেণ্ট খোলক', 'ডাক্তাৰৰ সাক্ষাৎ চাওক'],
     TRIGGER_SOS: ['এছঅ\'এছ পঠিয়াওক', 'জৰুৰী সংকেত', 'জৰুৰী সংকেত পঠিয়াওক', 'বিপদৰ সংকেত', 'এছ অ এছ', 'জৰুৰী বিপদ', 'এছঅ\'এছ'],
   },
 
@@ -121,6 +125,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['আজকের রুটিন', 'অনুস্মারক', 'রুটিন দেখুন'],
     OPEN_HELP: ['আমার সাহায্য দরকার', 'সাহায্য'],
     OPEN_SETTINGS: ['সেটিংস'],
+    OPEN_APPOINTMENTS: ['ডাক্তারের অ্যাপয়েন্টমেন্ট', 'অ্যাপয়েন্টমেন্ট দেখুন', 'ডাক্তার দেখান'],
     TRIGGER_SOS: ['এসওএস পাঠান', 'জরুরি সংকেত', 'জরুরি সংকেত পাঠান', 'এস ও এস', 'বিপদ সংকেত', 'জরুরি সাহায্য পাঠান', 'এসওএস'],
   },
 
@@ -141,6 +146,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['मेरी दिनचर्या दिखाओ', 'आज का रूटीन', 'याद दिलाओ'],
     OPEN_HELP: ['मुझे मदद चाहिए', 'सहायता'],
     OPEN_SETTINGS: ['सेटिंग्स'],
+    OPEN_APPOINTMENTS: ['डॉक्टर अपॉइंटमेंट', 'अपॉइंटमेंट दिखाओ', 'डॉक्टर से मिलना', 'अपॉइंटमेंट्स'],
     TRIGGER_SOS: ['एसओएस भेजो', 'आपातकालीन संकेत भेजो', 'आपातकालीन संकेत', 'इमरजेंसी भेजो', 'एस ओ एस', 'मदद भेजो आपातकाल', 'एसओएस'],
   },
 
@@ -161,6 +167,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['आजको दिनचर्या', 'सम्झनाहरू'],
     OPEN_HELP: ['मलाई मद्दत चाहिन्छ'],
     OPEN_SETTINGS: ['सेटिङहरू'],
+    OPEN_APPOINTMENTS: ['डाक्टर भेट', 'अपोइन्टमेन्ट', 'डाक्टर अपोइन्टमेन्ट'],
     TRIGGER_SOS: ['एसओएस पठाउनुहोस्', 'आपतकालीन संकेत', 'आपतकालीन मद्दत', 'एस ओ एस', 'एसओएस'],
   },
 
@@ -181,6 +188,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['ঙসিগী থবক'],
     OPEN_HELP: ['তেংবাংবীয়ু'],
     OPEN_SETTINGS: ['সেটিংস'],
+    OPEN_APPOINTMENTS: ['দালাইগা উনবা', 'এপয়েন্টমেন্ট'],
     TRIGGER_SOS: ['এস ও এস থাবা', 'তেংবাং থাবা', 'জরুরি তেংবাং', 'এসওএস'],
   },
 
@@ -201,6 +209,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['show routine', 'rukom trei sngi'],
     OPEN_HELP: ['help me', 'iarap nga'],
     OPEN_SETTINGS: ['settings', 'jingpynbeit'],
+    OPEN_APPOINTMENTS: ['appointment doctor', 'iakynduh doctor', 'doctor appointment'],
     TRIGGER_SOS: ['phah sos', 'sos signal', 'iarap emergency', 'sos'],
   },
 
@@ -221,6 +230,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['vawiin thiltum', 'thiltum'],
     OPEN_HELP: ['puih ka mamawh', 'min pui rawh'],
     OPEN_SETTINGS: ['settings'],
+    OPEN_APPOINTMENTS: ['doctor hmuhna', 'appointment'],
     TRIGGER_SOS: ['sos thawn rawh', 'emergency thawn rawh', 'sos'],
   },
 
@@ -241,6 +251,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['today routine', 'routine'],
     OPEN_HELP: ['help me', 'madat'],
     OPEN_SETTINGS: ['settings'],
+    OPEN_APPOINTMENTS: ['doctor logote kotha', 'appointment', 'doctor appointment'],
     TRIGGER_SOS: ['sos pathabi', 'emergency madat pathabi', 'sos'],
   },
 
@@ -261,6 +272,7 @@ const VOICE_COMMANDS: Record<string, Record<Exclude<NavigationIntent, 'UNKNOWN' 
     OPEN_ROUTINE: ['routine hapkan'],
     OPEN_HELP: ['help me'],
     OPEN_SETTINGS: ['settings'],
+    OPEN_APPOINTMENTS: ['doctor appointment', 'doctor kotha'],
     TRIGGER_SOS: ['sos thapika', 'emergency madat', 'sos'],
   },
 };
@@ -284,6 +296,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'Opening your daily routine schedule.',
     OPEN_HELP: 'Opening Memory Assistant for help.',
     OPEN_SETTINGS: 'Opening Settings.',
+    OPEN_APPOINTMENTS: 'Opening Doctor Appointments.',
     TRIGGER_SOS: 'Emergency SOS signal sent to your caregiver and emergency contacts. Help is on the way. Please stay calm and safe.',
     AMBIGUOUS_GAME_PROMPT: 'Which game would you like to play? Memory Match, Sequence, or Family Photos?',
     UNKNOWN: 'I did not understand that command. Please try again or tap the screen.',
@@ -306,6 +319,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'আপোনাৰ দৈনিক ৰুটিন খোলা হৈছে।',
     OPEN_HELP: 'সহায়ৰ বাবে স্মৃতি সহায়কলৈ যোৱা হৈছে।',
     OPEN_SETTINGS: 'ছেটিংছ খোলা হৈছে।',
+    OPEN_APPOINTMENTS: 'ডাক্তাৰৰ এপইণ্টমেণ্ট খোলা হৈছে।',
     TRIGGER_SOS: 'আপোনাৰ কেয়াৰগিভাৰ আৰু জৰুৰী যোগাযোগলৈ এছঅ\'এছ বিপদ সংকেত প্ৰেৰণ কৰা হৈছে। সহায় শীঘ্ৰেই আহি আছে। শান্ত হৈ থাকক।',
     AMBIGUOUS_GAME_PROMPT: 'আপুনি কোনটো খেল খেলিব বিচাৰে? মেম\'ৰী মেছ, ক্ৰম খেল, নে পৰিয়ালৰ ছবি খেল?',
     UNKNOWN: 'বুজি পাবলৈ অসুবিধা হ\'ল। অনুগ্ৰহ কৰি আকৌ কওক।',
@@ -328,6 +342,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'আপনার রুটিন খোলা হচ্ছে।',
     OPEN_HELP: 'সহায়তার জন্য মেমরি অ্যাসিস্ট্যান্ট খোলা হচ্ছে।',
     OPEN_SETTINGS: 'সেটিংস খোলা হচ্ছে।',
+    OPEN_APPOINTMENTS: 'ডাক্তারের অ্যাপয়েন্টমেন্ট খোলা হচ্ছে।',
     TRIGGER_SOS: 'আপনার কেয়ারগিভার এবং জরুরি পরিচিতিদের কাছে জরুরি এসওএস সংকেত পাঠানো হয়েছে। সাহায্য আসছে। দয়া করে শান্ত থাকুন।',
     AMBIGUOUS_GAME_PROMPT: 'আপনি কোন গেমটি খেলতে চান? মেমরি ম্যাচ, সিকোয়েন্স, নাকি পরিবারের ছবি?',
     UNKNOWN: 'বুঝতে পারিনি। অনুগ্রহ করে আবার বলুন।',
@@ -350,6 +365,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'आपकी दिनचर्या खोली जा रही है।',
     OPEN_HELP: 'सहायता के लिए मेमोरी असिस्टेंट खोला जा रहा है।',
     OPEN_SETTINGS: 'सेटिंग्स खोली जा रही हैं।',
+    OPEN_APPOINTMENTS: 'डॉक्टर अपॉइंटमेंट्स खोले जा रहे हैं।',
     TRIGGER_SOS: 'आपके देखभालकर्ता और आपातकालीन संपर्कों को आपातकालीन एसओएस संकेत भेज दिया गया है। मदद आ रही है। कृपया शांत रहें।',
     AMBIGUOUS_GAME_PROMPT: 'आप कौन सा खेल खेलना चाहते हैं? मेमोरी मैच, सीक्वेंस, या परिवार फोटो?',
     UNKNOWN: 'समझ नहीं आया। कृपया दोबारा बोलें।',
@@ -372,6 +388,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'तपाईंको दिनचर्या खोलिँदैछ।',
     OPEN_HELP: 'स्मृति सहायकमा जाँदैछ।',
     OPEN_SETTINGS: 'सेटिङहरू खोलिँदैछ।',
+    OPEN_APPOINTMENTS: 'डाक्टर अपोइन्टमेन्ट खोलिँदैछ।',
     TRIGGER_SOS: 'तपाईंको हेरचाहकर्ता र आपतकालीन सम्पर्कहरूलाई आपतकालीन एसओएस संकेत पठाइएको छ। मद्दत आउँदैछ। कृपया शान्त रहनुहोस्।',
     AMBIGUOUS_GAME_PROMPT: 'तपाईं कुन खेल खेल्न चाहनुहुन्छ? मेमोरी म्याच, क्रम, वा परिवार फोटो?',
     UNKNOWN: 'बुझ्न सकिएन। कृपया फेरि भन्नुहोस्।',
@@ -394,6 +411,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'ঙসিগী থবক উৎলে।',
     OPEN_HELP: 'তেংবাংবা হাংদোকলে।',
     OPEN_SETTINGS: 'সেটিংস হাংদোকলে।',
+    OPEN_APPOINTMENTS: 'দালাইগা উনবা হাংদোকলে।',
     TRIGGER_SOS: 'অদোমগী কেয়ারগিভারদা জরুরি এস ও এস তেংবাংগী পাউজেল থাখ্রে। তেংবাং লাক্কনি। নুংঙাইনা লৈবীয়ু।',
     AMBIGUOUS_GAME_PROMPT: 'অদোম করম্বা শান্নপোৎ শান্নগে? মেমোরি গেম, পরিংশান্নপোৎ, নত্রগা ফটো?',
     UNKNOWN: 'খঙবা ঙমদ্রে। অমুক হন্না হায়বীয়ু।',
@@ -416,6 +434,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'Plie ia ka rukom trei sngi jong phi.',
     OPEN_HELP: 'Plie ia ka Jingïarap.',
     OPEN_SETTINGS: 'Plie ia ka Jingpynbeit Settings.',
+    OPEN_APPOINTMENTS: 'Plie ia ki Doctor Appointment.',
     TRIGGER_SOS: 'La phah ia ka SOS sha ka nongsumar bad ki ba ha-iing. Kan wan iarap kloi. Shongsuk.',
     AMBIGUOUS_GAME_PROMPT: 'Kaino ka jingïalehkai kaba phi kwah? Pynïahap Kot lane Kynmaw Ryntih Rong?',
     UNKNOWN: 'Wym sngewthuh. Sngewbha ong biang.',
@@ -438,6 +457,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'I vawiin thiltum hawng mek e.',
     OPEN_HELP: 'Puih dilna hawng mek e.',
     OPEN_SETTINGS: 'Settings hawng mek e.',
+    OPEN_APPOINTMENTS: 'Doctor hmuhna hawng mek e.',
     TRIGGER_SOS: 'I enkawltu leh chhungte hnenah SOS thawn a ni tawh e. Puihna a rawn thleng tep e. Thlamuang takin awm rawh.',
     AMBIGUOUS_GAME_PROMPT: 'Khawi infiamna nge i khelh duh? Card Inmil Zawng nge Rawng Inrem Vawng?',
     UNKNOWN: 'Ka hrethiam lo. Khawngaihin sawi nawn leh rawh.',
@@ -460,6 +480,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'Apuni laga routine khuli ase.',
     OPEN_HELP: 'Madat jaga khuli ase.',
     OPEN_SETTINGS: 'Settings khuli ase.',
+    OPEN_APPOINTMENTS: 'Doctor appointment khuli ase.',
     TRIGGER_SOS: 'Apuni laga caregiver ke SOS emergency signal pathai dise. Madat ahibo, bhal pora thakibi.',
     AMBIGUOUS_GAME_PROMPT: 'Apuni kunia khel khelibole mon ase? Card Jura Milabi ki Rong Sequence?',
     UNKNOWN: 'Bujhibole parise nai. Akou kobi.',
@@ -482,6 +503,7 @@ export const VOICE_RESPONSES: Record<string, Record<NavigationIntent, string>> =
     OPEN_ROUTINE: 'Routine hapkan.',
     OPEN_HELP: 'Help hapkan.',
     OPEN_SETTINGS: 'Settings hapkan.',
+    OPEN_APPOINTMENTS: 'Doctor appointment opened.',
     TRIGGER_SOS: 'No laga caregiver lw SOS emergency signal thapika dwnam. Madat ahe, bhal dwnam.',
     AMBIGUOUS_GAME_PROMPT: 'Hiki minyi gwnam no agka? Card jura ki Rong line sequence?',
     UNKNOWN: 'Khedapnam gwnam. Akou hisab.',

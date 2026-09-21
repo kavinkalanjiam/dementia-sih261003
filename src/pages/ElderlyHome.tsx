@@ -32,8 +32,14 @@ import {
   MicOff,
   Volume2,
   VolumeX,
+  Calendar,
+  Clock,
+  Stethoscope,
+  MapPin,
+  Video,
 } from 'lucide-react';
-import { GameType } from '../types';
+import { GameType, Appointment } from '../types';
+import { AppointmentService } from '../services/appointmentService';
 
 interface ElderlyHomeProps {
   onNavigate: (page: string) => void;
@@ -55,8 +61,44 @@ export const ElderlyHome: React.FC<ElderlyHomeProps> = ({ onNavigate, onPlayGame
   const [showManualSOSModal, setShowManualSOSModal] = useState(false);
   const [sosSentSuccess, setSosSentSuccess] = useState(false);
 
+  // Upcoming Doctor Appointment State
+  const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(null);
+  const [showApptDetailsModal, setShowApptDetailsModal] = useState(false);
+
   // Welcome Speech State
   const [isSpeakingWelcome, setIsSpeakingWelcome] = useState(false);
+
+  // Load upcoming appointment for active patient
+  useEffect(() => {
+    const fetchUpcomingAppt = async () => {
+      try {
+        const appts = await AppointmentService.getAppointments(activePatientId);
+        const todayIso = new Date().toISOString().split('T')[0];
+        const upcoming = appts
+          .filter(
+            (a) =>
+              a.appointmentDate >= todayIso &&
+              a.status !== 'cancelled' &&
+              a.status !== 'completed'
+          )
+          .sort((a, b) =>
+            a.appointmentDate.localeCompare(b.appointmentDate) ||
+            a.appointmentTime.localeCompare(b.appointmentTime)
+          );
+        setUpcomingAppointment(upcoming.length > 0 ? upcoming[0] : null);
+      } catch (e) {
+        console.warn('Error fetching upcoming appointment for patient', e);
+      }
+    };
+
+    fetchUpcomingAppt();
+
+    const unsub = AppointmentService.subscribe(() => {
+      fetchUpcomingAppt();
+    });
+
+    return () => unsub();
+  }, [activePatientId]);
 
   // Pre-fetch active patient memories and routines in background
   useEffect(() => {
@@ -515,6 +557,65 @@ export const ElderlyHome: React.FC<ElderlyHomeProps> = ({ onNavigate, onPlayGame
         </div>
       </div>
 
+      {/* ── UPCOMING DOCTOR APPOINTMENT CARD (ELDERLY VIEW) ── */}
+      {upcomingAppointment && (
+        <div className="bg-[#FAF9F4] border-2 border-[#176B61] rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E4DED4] pb-3">
+            <span className="text-xs uppercase font-extrabold text-[#176B61] bg-[#DDE9D9] px-3 py-1 rounded-full flex items-center gap-1.5 border border-[#BFCFC5]">
+              <Stethoscope className="w-3.5 h-3.5 text-[#176B61]" /> Upcoming Doctor Visit
+            </span>
+            <span className="text-xs text-[#26332F] font-bold bg-white px-2.5 py-0.5 rounded-full border border-[#E4DED4]">
+              {upcomingAppointment.appointmentDate === new Date().toISOString().split('T')[0]
+                ? '⭐ Today'
+                : `📅 ${upcomingAppointment.appointmentDate}`}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-xl sm:text-2xl font-black text-[#26332F]">
+                {upcomingAppointment.doctor?.name || 'Dr. Medical Specialist'}
+              </h2>
+              <p className="text-sm font-bold text-[#176B61]">
+                {upcomingAppointment.doctor?.specialization || 'Cognitive & General Health'}
+              </p>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#66736D] pt-1">
+                <span className="flex items-center gap-1 font-semibold">
+                  <Clock className="w-3.5 h-3.5 text-[#176B61]" /> {upcomingAppointment.appointmentTime}
+                </span>
+                <span className="flex items-center gap-1 font-semibold">
+                  <MapPin className="w-3.5 h-3.5 text-[#176B61]" />
+                  {upcomingAppointment.hospital || upcomingAppointment.doctor?.hospital || 'SIROI Health Network'}
+                </span>
+                <span className="font-bold px-2 py-0.5 rounded-md bg-white border border-[#E4DED4] text-[#26332F]">
+                  {upcomingAppointment.appointmentType === 'video' ? '📹 Video Call' : '🏥 In-Person'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              {upcomingAppointment.meetingLink && upcomingAppointment.appointmentType === 'video' && (
+                <a
+                  href={upcomingAppointment.meetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-none px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-2xl shadow-sm transition flex items-center justify-center gap-1.5"
+                >
+                  <Video className="w-4 h-4" /> Join Call
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowApptDetailsModal(true)}
+                className="flex-1 sm:flex-none px-5 py-3 bg-[#176B61] hover:bg-[#12564E] text-white font-extrabold text-xs rounded-2xl shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                Visit Details <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Quick Action Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Play Cognitive Games */}
@@ -631,6 +732,103 @@ export const ElderlyHome: React.FC<ElderlyHomeProps> = ({ onNavigate, onPlayGame
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── DOCTOR APPOINTMENT DETAILS MODAL FOR ELDERLY ── */}
+      {showApptDetailsModal && upcomingAppointment && (
+        <div className="fixed inset-0 bg-[#26332F]/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border-2 border-[#176B61] animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-[#E4DED4] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#DDE9D9] text-[#176B61] flex items-center justify-center">
+                  <Stethoscope className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-xs uppercase font-extrabold tracking-wider bg-[#DDE9D9] text-[#176B61] px-2.5 py-0.5 rounded-full">
+                    Doctor Consultation
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-black text-[#26332F] mt-1">
+                    {upcomingAppointment.doctor?.name || 'Dr. Specialist'}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowApptDetailsModal(false)}
+                className="w-9 h-9 rounded-full bg-[#FAF9F4] text-[#66736D] hover:text-[#26332F] border border-[#E4DED4] flex items-center justify-center font-bold cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="bg-[#FAF9F4] p-4 rounded-2xl border border-[#E4DED4] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#66736D] font-bold">Specialist:</span>
+                  <span className="text-xs font-black text-[#176B61]">
+                    {upcomingAppointment.doctor?.specialization || 'Cognitive Health'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#66736D] font-bold">Date:</span>
+                  <span className="text-xs font-black text-[#26332F]">
+                    {upcomingAppointment.appointmentDate}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#66736D] font-bold">Time:</span>
+                  <span className="text-xs font-black text-[#26332F]">
+                    {upcomingAppointment.appointmentTime}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#66736D] font-bold">Location / Hospital:</span>
+                  <span className="text-xs font-black text-[#26332F]">
+                    {upcomingAppointment.hospital || upcomingAppointment.doctor?.hospital || 'SIROI Health Network'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#66736D] font-bold">Consultation Mode:</span>
+                  <span className="text-xs font-black text-[#176B61]">
+                    {upcomingAppointment.appointmentType === 'video' ? '📹 Video Call' : '🏥 In-Person Visit'}
+                  </span>
+                </div>
+              </div>
+
+              {upcomingAppointment.reason && (
+                <div className="bg-[#FAF9F4] p-3.5 rounded-2xl border border-[#E4DED4]">
+                  <span className="text-xs text-[#66736D] font-bold block mb-1">Reason:</span>
+                  <p className="text-xs font-semibold text-[#26332F]">{upcomingAppointment.reason}</p>
+                </div>
+              )}
+
+              {upcomingAppointment.meetingLink && upcomingAppointment.appointmentType === 'video' && (
+                <a
+                  href={upcomingAppointment.meetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+                >
+                  <Video className="w-4 h-4" /> Start Video Consultation Now
+                </a>
+              )}
+
+              <div className="p-3 bg-[#DDE9D9]/40 border border-[#BFCFC5] rounded-2xl text-xs text-[#26332F] flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#176B61] shrink-0" />
+                <span>Your caregiver and family care team are tracking this appointment.</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowApptDetailsModal(false)}
+                className="w-full py-3 bg-[#176B61] hover:bg-[#12564E] text-white font-extrabold text-sm rounded-xl shadow-xs transition cursor-pointer"
+              >
+                Close Details
+              </button>
+            </div>
           </div>
         </div>
       )}

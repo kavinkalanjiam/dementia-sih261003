@@ -18,6 +18,7 @@ import { AuthCallback } from './pages/AuthCallback';
 import { ProfileSetup } from './pages/ProfileSetup';
 import { CaregiverDashboard } from './pages/CaregiverDashboard';
 import { FamilyPlaces } from './pages/FamilyPlaces';
+import { AppointmentsPage } from './pages/Appointments';
 import { MedicalHistoryDetail } from './pages/MedicalHistoryDetail';
 import { ElderlyHome } from './pages/ElderlyHome';
 import { GamesHub } from './pages/GamesHub';
@@ -69,10 +70,12 @@ const MainApp: React.FC = () => {
       '/caregiver/setup',
       '/caregiver/care-team',
       '/caregiver/medical-history',
+      '/caregiver/appointments',
       'dashboard',
       'setup-profile',
       'caregiver-setup',
       'medical-history',
+      'appointments',
     ].includes(tab);
 
     const publicAuthRoutes = [
@@ -276,6 +279,11 @@ const MainApp: React.FC = () => {
       case 'family-places':
         if (isPurePatient) return <ElderlyHome onNavigate={navigateTo} onPlayGame={handlePlayGame} />;
         return <FamilyPlaces onNavigate={navigateTo} />;
+
+      case '/caregiver/appointments':
+      case 'appointments':
+        if (isPurePatient) return <ElderlyHome onNavigate={navigateTo} onPlayGame={handlePlayGame} />;
+        return <AppointmentsPage onNavigate={navigateTo} />;
 
       case '/caregiver/medical-history':
       case 'medical-history':

@@ -8,6 +8,8 @@ import {
   LocalAlert,
   LocalCognitiveProfile,
   LocalMLPrediction,
+  LocalDoctor,
+  LocalAppointment,
   getDeviceId,
 } from './db';
 import { SyncQueue } from './syncQueue';
@@ -381,6 +383,85 @@ export const OfflineStorage = {
   async getMLPredictionsForPatient(patientId: string): Promise<LocalMLPrediction[]> {
     const list = await db.mlPredictions.where('patient_id').equals(patientId).toArray();
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  // ── Appointments ──────────────────────────────────────────
+  async saveAppointment(appointment: LocalAppointment, enqueue = true): Promise<LocalAppointment> {
+    const existing = await db.appointments.get(appointment.id);
+    const record: LocalAppointment = {
+      ...appointment,
+      created_at: appointment.created_at || existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await db.appointments.put(record);
+    if (enqueue) {
+      await SyncQueue.enqueue('INSERT', 'appointments', record.id, {
+        id: record.id,
+        patient_id: record.patient_id,
+        caregiver_id: record.caregiver_id,
+        doctor_id: record.doctor_id,
+        appointment_date: record.appointment_date,
+        appointment_time: record.appointment_time,
+        appointment_type: record.appointment_type,
+        reason: record.reason || null,
+        notes: record.notes || null,
+        status: record.status,
+        hospital: record.hospital || null,
+        meeting_link: record.meeting_link || null,
+        cancelled_at: record.cancelled_at || null,
+        completed_at: record.completed_at || null,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      });
+    }
+    return record;
+  },
+
+  async getAppointments(patientId?: string): Promise<LocalAppointment[]> {
+    if (patientId) {
+      const list = await db.appointments.where('patient_id').equals(patientId).toArray();
+      return list.sort((a, b) => new Date(`${b.appointment_date}T${b.appointment_time || '00:00'}`).getTime() - new Date(`${a.appointment_date}T${a.appointment_time || '00:00'}`).getTime());
+    }
+    const all = await db.appointments.toArray();
+    return all.sort((a, b) => new Date(`${b.appointment_date}T${b.appointment_time || '00:00'}`).getTime() - new Date(`${a.appointment_date}T${a.appointment_time || '00:00'}`).getTime());
+  },
+
+  async getAppointmentById(id: string): Promise<LocalAppointment | undefined> {
+    return await db.appointments.get(id);
+  },
+
+  async updateAppointmentStatus(
+    id: string,
+    status: LocalAppointment['status'],
+    enqueue = true
+  ): Promise<void> {
+    const existing = await db.appointments.get(id);
+    if (existing) {
+      existing.status = status;
+      existing.updated_at = new Date().toISOString();
+      if (status === 'cancelled') existing.cancelled_at = new Date().toISOString();
+      if (status === 'completed') existing.completed_at = new Date().toISOString();
+      await db.appointments.put(existing);
+      if (enqueue) {
+        await SyncQueue.enqueue('UPDATE', 'appointments', id, {
+          id,
+          status,
+          cancelled_at: existing.cancelled_at || null,
+          completed_at: existing.completed_at || null,
+          updated_at: existing.updated_at,
+        });
+      }
+    }
+  },
+
+  // ── Doctors ───────────────────────────────────────────────
+  async saveDoctor(doc: LocalDoctor): Promise<LocalDoctor> {
+    await db.doctors.put(doc);
+    return doc;
+  },
+
+  async getDoctors(): Promise<LocalDoctor[]> {
+    return await db.doctors.toArray();
   },
 };
 

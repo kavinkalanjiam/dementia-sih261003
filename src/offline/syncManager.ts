@@ -236,6 +236,27 @@ class SyncManagerClass {
       }
     }
 
+    if (table === 'appointments') {
+      if (copy.appointment_time) {
+        const timeStr = String(copy.appointment_time).trim();
+        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (match) {
+          let hours = parseInt(match[1], 10);
+          const minutes = match[2];
+          const modifier = match[3] ? match[3].toUpperCase() : null;
+          if (modifier === 'PM' && hours < 12) hours += 12;
+          if (modifier === 'AM' && hours === 12) hours = 0;
+          copy.appointment_time = `${hours.toString().padStart(2, '0')}:${minutes}:00`;
+        } else if (/^\d{2}:\d{2}$/.test(timeStr)) {
+          copy.appointment_time = `${timeStr}:00`;
+        }
+      }
+      if (copy.id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(copy.id)) {
+        delete copy.id;
+      }
+      delete copy.sync_status;
+    }
+
     return copy;
   }
 
