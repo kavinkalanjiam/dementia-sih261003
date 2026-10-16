@@ -64,6 +64,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
   const [alertsList, setAlertsList] = useState<SOSAlert[]>(() => AlertEngineService.getAllAlerts());
   const [showDbViewer, setShowDbViewer] = useState<boolean>(false);
   const [careTeam, setCareTeam] = useState<CaregiverPatientRelation[]>(() => CareTeamService.getCareTeam(patient?.id || 'pat-demo-1'));
+  const [availablePatients, setAvailablePatients] = useState<PatientProfile[]>(() => StorageService.getAllPatientProfiles());
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [inviteName, setInviteName] = useState<string>('');
   const [inviteEmail, setInviteEmail] = useState<string>('');
@@ -168,6 +169,8 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
 
       // 2. Sync patients list from Supabase cloud
       await StorageService.syncPatientsFromCloud();
+      const allSynced = StorageService.getAllPatientProfiles();
+      setAvailablePatients(allSynced);
 
       // 3. Fetch assigned patient for current caregiver if logged in
       let targetPid = patient?.id;
@@ -176,16 +179,19 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
           const cloudPid = await CareTeamService.fetchCaregiverPatientFromCloud(user.id);
           if (cloudPid) {
             targetPid = cloudPid;
-            const p = StorageService.getPatientProfile(cloudPid, user.id);
-            setPatient(p);
-            const team = await CareTeamService.fetchCareTeamFromCloud(p.id);
-            setCareTeam(team);
+            StorageService.setActivePatientId(cloudPid, user.id);
           }
         } catch {}
       }
 
+      const resolved = StorageService.getPatientProfile(targetPid, user?.id);
+      setPatient(resolved);
+      if (resolved?.id) {
+        CareTeamService.fetchCareTeamFromCloud(resolved.id).then(setCareTeam).catch(() => {});
+      }
+
       // 4. Load real game sessions and scores directly from Supabase
-      await refreshData(targetPid);
+      await refreshData(resolved?.id || targetPid);
       const cloudAlerts = await AlertEngineService.fetchAlertsFromCloud();
       setAlertsList(cloudAlerts);
     };
@@ -241,9 +247,6 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
 
   const emergencyPhone = patient.emergencyContact?.primaryContactPhone || elderly.emergencyContact || '+91 98765 43210';
 
-  const caregiverPatientIds = user?.id ? CareTeamService.getPatientsForCaregiver(user.id) : [];
-  const allPatients = StorageService.getAllPatientProfiles();
-  const availablePatients = allPatients.filter(p => caregiverPatientIds.includes(p.id) || p.id === patient.id);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 text-[#26332F]">

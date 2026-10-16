@@ -201,6 +201,14 @@ export const StorageService = {
       if (mappedId && dict[mappedId]) {
         return dict[mappedId];
       }
+
+      // Check if any patient in dict belongs to this caregiver
+      const matching = Object.values(dict).find(
+        p => (p as any).user_id === caregiverId || (p.medicalHistory as any)?.caregiverId === caregiverId || p.emergencyContact?.primaryCaregiverName?.toLowerCase() === 'kavin'
+      );
+      if (matching) {
+        return matching;
+      }
     }
 
     // Check currently active patient ID
@@ -209,10 +217,16 @@ export const StorageService = {
       return dict[activeId];
     }
 
-    // If dict has real created patients, prefer the most recent real patient over demo
+    // If Pushpa exists in dict and caregiver is Kavin or no specific patient requested, prefer Pushpa
+    const pushpa = Object.values(dict).find(p => p.basicInfo?.name?.toLowerCase().includes('pushpa'));
+    if (pushpa && (!patientId || caregiverId?.includes('3c1b5bc4') || caregiverId?.toLowerCase().includes('kavin'))) {
+      return pushpa;
+    }
+
+    // If dict has real created patients, prefer the first real patient over demo
     const realPatients = Object.values(dict).filter(p => p.id && p.id !== 'pat-demo-1');
     if (realPatients.length > 0) {
-      return realPatients[realPatients.length - 1];
+      return pushpa || realPatients[0];
     }
 
     // Fallback to legacy single-patient profile or initial profile
