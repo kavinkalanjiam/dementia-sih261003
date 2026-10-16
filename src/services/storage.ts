@@ -81,6 +81,103 @@ function setItem<T>(key: string, value: T, syncChannel = true): void {
   }
 }
 
+export const PUSHPA_PATIENT_PROFILE: PatientProfile = {
+  id: '2b4f46e4-f183-4e7f-8097-f12dc10bf021',
+  basicInfo: {
+    name: 'Pushpa',
+    dateOfBirth: '1961-10-11',
+    age: 76,
+    gender: 'Female',
+    state: 'Tamil Nadu',
+    language: 'en',
+    phone: '',
+    photo: '',
+  },
+  medicalHistory: {
+    conditions: [],
+    neurologicalHistory: [],
+    surgeries: [],
+    hospitalizations: [],
+    allergies: [],
+    documents: [],
+    visionDifficulties: true,
+    hearingDifficulties: true,
+    speechDifficulties: false,
+    mobilityLimitations: false,
+    sleepDifficulties: false,
+    notes: '',
+  },
+  emergencyContact: {
+    primaryCaregiverName: 'Kavin (Grandchild)',
+    primaryContactName: 'Kavin',
+    primaryContactPhone: '8148325086',
+    relationship: 'Grandchild',
+    doctorName: '',
+    allergies: [],
+  },
+  patientCredentials: {
+    loginId: 'Pushpa',
+    password: 'password123',
+  },
+  medications: [],
+  dailyRoutine: INITIAL_ROUTINE,
+  cognitiveProfile: {
+    memory: 75,
+    attention: 70,
+    recognition: 80,
+    recall: 65,
+    language: 75,
+    familiarity: 85,
+  },
+  dailyFunction: {
+    memoryDifficulty: 'occasional',
+    attentionDifficulty: 'occasional',
+    peopleRecognitionDifficulty: 'none',
+    placeRecognitionDifficulty: 'none',
+    routineDifficulty: 'occasional',
+    communicationDifficulty: 'none',
+    dailyTaskDifficulty: 'none',
+  },
+  caregiverObservations: [],
+  accessibility: {
+    largeText: true,
+    highContrast: false,
+    voiceEnabled: true,
+    reduceMotion: false,
+  },
+  gamification: {
+    xp: 0,
+    mindPoints: 0,
+    userLevel: 1,
+    currentStreak: 0,
+    lastActiveDate: new Date().toISOString(),
+    unlockedBadges: [],
+  },
+  familiarPeople: [],
+  familiarPlaces: [],
+};
+
+export const isKavinUser = (caregiverId?: string): boolean => {
+  if (caregiverId === '3c1b5bc4-180f-4273-8d81-57178939268b') return true;
+  if (typeof caregiverId === 'string' && caregiverId.toLowerCase().includes('kavin')) return true;
+  try {
+    if (typeof window !== 'undefined') {
+      const cgSessionStr = localStorage.getItem('mindcare_caregiver_session');
+      if (cgSessionStr) {
+        const cg = JSON.parse(cgSessionStr);
+        if (
+          cg?.id === '3c1b5bc4-180f-4273-8d81-57178939268b' ||
+          cg?.email?.toLowerCase().includes('kavin') ||
+          cg?.name?.toLowerCase().includes('kavin')
+        ) {
+          return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
+};
+
 export const StorageService = {
   resetDemoData(): void {
     setItem(KEYS.CAREGIVER_PROFILE, INITIAL_CAREGIVER_PROFILE);
@@ -105,26 +202,15 @@ export const StorageService = {
 
   getActivePatientId(caregiverId?: string): string {
     // 0. If caregiver is Kavin or caregiver session is Kavin, strictly return Pushpa's ID
-    if (
-      caregiverId === '3c1b5bc4-180f-4273-8d81-57178939268b' ||
-      caregiverId?.toLowerCase().includes('kavin')
-    ) {
+    if (isKavinUser(caregiverId)) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mindcare_current_active_patient_id', '2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+          localStorage.setItem('mindcare_active_patient_3c1b5bc4-180f-4273-8d81-57178939268b', '2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+        }
+      } catch {}
       return '2b4f46e4-f183-4e7f-8097-f12dc10bf021';
     }
-
-    try {
-      const cgSessionStr = typeof window !== 'undefined' ? localStorage.getItem('mindcare_caregiver_session') : null;
-      if (cgSessionStr) {
-        const cg = JSON.parse(cgSessionStr);
-        if (
-          cg?.email?.toLowerCase().includes('kavin') ||
-          cg?.name?.toLowerCase().includes('kavin') ||
-          cg?.id === '3c1b5bc4-180f-4273-8d81-57178939268b'
-        ) {
-          return '2b4f46e4-f183-4e7f-8097-f12dc10bf021';
-        }
-      }
-    } catch {}
 
     // 1. If caregiverId is provided, check caregiver-patient mapping
     if (caregiverId) {
@@ -167,6 +253,10 @@ export const StorageService = {
   },
 
   setActivePatientId(patientId: string, caregiverId?: string): void {
+    if (isKavinUser(caregiverId) && patientId !== '2b4f46e4-f183-4e7f-8097-f12dc10bf021') {
+      // Prevent Kavin from being switched to another patient
+      patientId = '2b4f46e4-f183-4e7f-8097-f12dc10bf021';
+    }
     localStorage.setItem('mindcare_current_active_patient_id', patientId);
     if (caregiverId) {
       const cgMap = getItem<Record<string, string>>('mindcare_caregiver_patient_map', {});
@@ -176,8 +266,26 @@ export const StorageService = {
     }
   },
 
-  getAllPatientProfiles(): PatientProfile[] {
+  getAllPatientProfiles(caregiverId?: string): PatientProfile[] {
     const dict = getItem<Record<string, PatientProfile>>('mindcare_patients_dict', {});
+
+    // For Kavin, strictly return Pushpa only! No switching dropdown or wrong patient!
+    if (isKavinUser(caregiverId)) {
+      const pushpa = this.getPatientProfile('2b4f46e4-f183-4e7f-8097-f12dc10bf021', caregiverId);
+      return [pushpa];
+    }
+
+    // If caregiverId provided, filter strictly to this caregiver's patients
+    if (caregiverId) {
+      const cgMap = getItem<Record<string, string>>('mindcare_caregiver_patient_map', {});
+      const assignedPid = cgMap[caregiverId] || localStorage.getItem(`mindcare_active_patient_${caregiverId}`);
+      if (assignedPid && dict[assignedPid]) {
+        return [dict[assignedPid]];
+      }
+      const myPatients = Object.values(dict).filter(p => (p as any).user_id === caregiverId);
+      if (myPatients.length > 0) return myPatients;
+    }
+
     const list = Object.values(dict);
     if (list.length > 0) return list;
     const single = getItem<PatientProfile>(KEYS.PATIENT_PROFILE, INITIAL_PATIENT_PROFILE);
@@ -211,6 +319,18 @@ export const StorageService = {
   getPatientProfile(patientId?: string, caregiverId?: string): PatientProfile {
     const dict = getItem<Record<string, PatientProfile>>('mindcare_patients_dict', {});
 
+    // 0. If caregiver is Kavin, STRICTLY return Pushpa! Never return Prem or another caregiver's patient!
+    if (isKavinUser(caregiverId)) {
+      if (dict['2b4f46e4-f183-4e7f-8097-f12dc10bf021']) {
+        return dict['2b4f46e4-f183-4e7f-8097-f12dc10bf021'];
+      }
+      const pushpa = Object.values(dict).find(p => p.basicInfo?.name?.toLowerCase().includes('pushpa'));
+      if (pushpa) {
+        return pushpa;
+      }
+      return PUSHPA_PATIENT_PROFILE;
+    }
+
     // If specific patient ID is requested
     if (patientId && dict[patientId]) {
       return dict[patientId];
@@ -226,7 +346,7 @@ export const StorageService = {
 
       // Check if any patient in dict belongs to this caregiver
       const matching = Object.values(dict).find(
-        p => (p as any).user_id === caregiverId || (p.medicalHistory as any)?.caregiverId === caregiverId || p.emergencyContact?.primaryCaregiverName?.toLowerCase() === 'kavin'
+        p => (p as any).user_id === caregiverId || (p.medicalHistory as any)?.caregiverId === caregiverId
       );
       if (matching) {
         return matching;
@@ -239,16 +359,10 @@ export const StorageService = {
       return dict[activeId];
     }
 
-    // If Pushpa exists in dict and caregiver is Kavin or no specific patient requested, prefer Pushpa
-    const pushpa = Object.values(dict).find(p => p.basicInfo?.name?.toLowerCase().includes('pushpa'));
-    if (pushpa && (!patientId || caregiverId?.includes('3c1b5bc4') || caregiverId?.toLowerCase().includes('kavin'))) {
-      return pushpa;
-    }
-
     // If dict has real created patients, prefer the first real patient over demo
     const realPatients = Object.values(dict).filter(p => p.id && p.id !== 'pat-demo-1');
     if (realPatients.length > 0) {
-      return pushpa || realPatients[0];
+      return realPatients[0];
     }
 
     // Fallback to legacy single-patient profile or initial profile
@@ -410,9 +524,30 @@ export const StorageService = {
           },
         };
 
+        (patProfile as any).user_id = dp.user_id;
         dict[patProfile.id] = patProfile;
         setItem(`mindcare_patient_${patProfile.id}`, patProfile);
         synced.push(patProfile);
+      }
+
+      // Sync caregiver_patients linking table from Supabase
+      try {
+        const { data: cgLinks } = await supabase.from('caregiver_patients').select('*');
+        if (cgLinks && cgLinks.length > 0) {
+          const cgMap = getItem<Record<string, string>>('mindcare_caregiver_patient_map', {});
+          for (const link of cgLinks) {
+            if (link.caregiver_id && link.patient_id) {
+              cgMap[link.caregiver_id] = link.patient_id;
+              localStorage.setItem(`mindcare_active_patient_${link.caregiver_id}`, link.patient_id);
+            }
+          }
+          setItem('mindcare_caregiver_patient_map', cgMap);
+        }
+      } catch {}
+
+      // Guarantee Pushpa is in dict
+      if (!dict['2b4f46e4-f183-4e7f-8097-f12dc10bf021']) {
+        dict['2b4f46e4-f183-4e7f-8097-f12dc10bf021'] = PUSHPA_PATIENT_PROFILE;
       }
 
       setItem('mindcare_patients_dict', dict);

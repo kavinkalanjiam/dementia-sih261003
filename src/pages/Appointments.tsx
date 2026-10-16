@@ -37,7 +37,7 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
   // Active patient and authorized patient list
   const [patient, setPatient] = useState<PatientProfile>(() => StorageService.getPatientProfile(undefined, user?.id));
   const caregiverPatientIds = user?.id ? CareTeamService.getPatientsForCaregiver(user.id) : [];
-  const allPatients = StorageService.getAllPatientProfiles();
+  const allPatients = StorageService.getAllPatientProfiles(user?.id);
   const availablePatients = allPatients.filter(p => caregiverPatientIds.includes(p.id) || p.id === patient?.id);
 
   // Doctors and Appointments state
@@ -118,6 +118,16 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (user?.id) {
+      const p = StorageService.getPatientProfile(undefined, user.id);
+      if (p && p.id !== patient?.id) {
+        setPatient(p);
+        setSelectedPatientId(p.id);
+      }
+    }
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     loadData();

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StorageService } from '../services/storage';
 import { MedicalContextService } from '../services/medicalContext';
 import { useI18n } from '../i18n';
+import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
   Stethoscope,
@@ -26,8 +27,18 @@ interface MedicalHistoryDetailProps {
 }
 
 export const MedicalHistoryDetail: React.FC<MedicalHistoryDetailProps> = ({ onBack }) => {
+  const { user } = useAuth();
   const { t } = useI18n();
-  const [patient, setPatient] = useState<PatientProfile>(StorageService.getPatientProfile());
+  const [patient, setPatient] = useState<PatientProfile>(() => StorageService.getPatientProfile(undefined, user?.id));
+
+  useEffect(() => {
+    if (user?.id) {
+      const p = StorageService.getPatientProfile(undefined, user.id);
+      if (p && p.id !== patient?.id) {
+        setPatient(p);
+      }
+    }
+  }, [user?.id, user?.email]);
 
   // Form states for adding items
   const [newCondName, setNewCondName] = useState<string>('');

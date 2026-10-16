@@ -57,7 +57,7 @@ export const FamilyPlaces: React.FC<FamilyPlacesProps> = ({ onNavigate }) => {
     StorageService.getPatientProfile(undefined, user?.id)
   );
   const caregiverPatientIds = user?.id ? CareTeamService.getPatientsForCaregiver(user.id) : [];
-  const allPatients = StorageService.getAllPatientProfiles();
+  const allPatients = StorageService.getAllPatientProfiles(user?.id);
   const availablePatients = allPatients.filter(
     (p) => caregiverPatientIds.includes(p.id) || p.id === patient?.id
   );
@@ -113,6 +113,16 @@ export const FamilyPlaces: React.FC<FamilyPlacesProps> = ({ onNavigate }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (user?.id) {
+      const p = StorageService.getPatientProfile(undefined, user.id);
+      if (p && p.id !== patient?.id) {
+        setPatient(p);
+        loadData(p.id);
+      }
+    }
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     loadData(patient?.id);
@@ -234,28 +244,9 @@ export const FamilyPlaces: React.FC<FamilyPlacesProps> = ({ onNavigate }) => {
             <span className="bg-[#DDE9D9] text-[#176B61] text-xs uppercase font-extrabold tracking-wider px-3 py-1 rounded-full border border-[#BFCFC5]">
               Family & Places Hub
             </span>
-            {availablePatients.length > 1 ? (
-              <select
-                value={patient?.id}
-                onChange={(e) => {
-                  const selected = StorageService.getPatientProfile(e.target.value, user?.id);
-                  setPatient(selected);
-                  StorageService.setActivePatientId(selected.id, user?.id);
-                  loadData(selected.id);
-                }}
-                className="bg-white border border-[#E4DED4] text-[#26332F] text-xs font-bold rounded-full px-3 py-1 outline-none cursor-pointer"
-              >
-                {availablePatients.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-white text-[#26332F]">
-                    Patient: {p.basicInfo.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-bold px-3 py-1 rounded-full border border-[#BFCFC5] flex items-center gap-1">
-                Patient: {patient?.basicInfo?.name || 'Selected Patient'}
-              </span>
-            )}
+            <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-bold px-3 py-1 rounded-full border border-[#BFCFC5] flex items-center gap-1">
+              Patient: {patient?.basicInfo?.name || 'Selected Patient'}
+            </span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#26332F] flex items-center gap-3">

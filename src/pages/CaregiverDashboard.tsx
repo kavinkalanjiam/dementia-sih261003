@@ -78,7 +78,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
   const routines = StorageService.getRoutine();
 
   const refreshData = async (targetPatientId?: string) => {
-    const pid = targetPatientId || patient?.id;
+    const pid = targetPatientId || StorageService.getActivePatientId(user?.id);
     const p = StorageService.getPatientProfile(pid, user?.id);
     setPatient(p);
 
@@ -169,11 +169,11 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
 
       // 2. Sync patients list from Supabase cloud
       await StorageService.syncPatientsFromCloud();
-      const allSynced = StorageService.getAllPatientProfiles();
+      const allSynced = StorageService.getAllPatientProfiles(user?.id);
       setAvailablePatients(allSynced);
 
       // 3. Fetch assigned patient for current caregiver if logged in
-      let targetPid = patient?.id;
+      let targetPid = StorageService.getActivePatientId(user?.id);
       if (user?.id) {
         try {
           const cloudPid = await CareTeamService.fetchCaregiverPatientFromCloud(user.id);
@@ -232,7 +232,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
     };
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   const handleUpdateStatus = async (alertId: string, newStatus: 'acknowledged' | 'resolved') => {
     AlertEngineService.updateAlertStatus(alertId, newStatus);
