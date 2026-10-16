@@ -66,9 +66,13 @@ export const FamilyPlaces: React.FC<FamilyPlacesProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'family' | 'places'>('all');
 
   // People & Places State
-  const [people, setPeople] = useState<FamiliarPerson[]>([]);
-  const [places, setPlaces] = useState<FamiliarPlace[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [people, setPeople] = useState<FamiliarPerson[]>(() =>
+    StorageService.getFamiliarPeople(patient?.id)
+  );
+  const [places, setPlaces] = useState<FamiliarPlace[]>(() =>
+    StorageService.getFamiliarPlaces(patient?.id)
+  );
+  const [loading, setLoading] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -92,21 +96,18 @@ export const FamilyPlaces: React.FC<FamilyPlacesProps> = ({ onNavigate }) => {
   const loadData = async (targetPid?: string) => {
     const pid = targetPid || patient?.id;
     if (!pid) return;
-    setLoading(true);
     try {
-      // 1. Fetch Cloud & Local People
-      let cloudPeople = await StorageService.fetchFamiliarPeopleFromCloud(pid);
-      if (!cloudPeople || cloudPeople.length === 0) {
-        cloudPeople = StorageService.getFamiliarPeople(pid);
+      // Parallel fetch from cloud for instantaneous response
+      const [cloudPeople, cloudPlaces] = await Promise.all([
+        StorageService.fetchFamiliarPeopleFromCloud(pid),
+        StorageService.fetchFamiliarPlacesFromCloud(pid),
+      ]);
+      if (cloudPeople && cloudPeople.length > 0) {
+        setPeople(cloudPeople);
       }
-      setPeople(cloudPeople || []);
-
-      // 2. Fetch Cloud & Local Places
-      let cloudPlaces = await StorageService.fetchFamiliarPlacesFromCloud(pid);
-      if (!cloudPlaces || cloudPlaces.length === 0) {
-        cloudPlaces = StorageService.getFamiliarPlaces(pid);
+      if (cloudPlaces && cloudPlaces.length > 0) {
+        setPlaces(cloudPlaces);
       }
-      setPlaces(cloudPlaces || []);
     } catch (e) {
       console.warn('Error loading family and places:', e);
     } finally {

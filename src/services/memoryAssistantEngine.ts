@@ -38,7 +38,7 @@ const format12HourTime = (timeStr: string): string => {
 };
 
 export const MemoryAssistantEngine = {
-  async fetchPatientResources(patientId?: string, authUserId?: string): Promise<MemoryAssistantResources> {
+  getLocalPatientResources(patientId?: string, authUserId?: string): MemoryAssistantResources {
     const resolvedPid =
       patientId ||
       StorageService.getActivePatientId(authUserId) ||
@@ -57,122 +57,18 @@ export const MemoryAssistantEngine = {
       isLoading: false,
     };
 
-    const candidateIds = new Set<string>();
-    if (resolvedPid && resolvedPid !== 'pat-demo-1') {
-      candidateIds.add(resolvedPid);
+    const localProfile = StorageService.getElderlyProfile(resolvedPid);
+    if (localProfile?.name && localProfile.name !== 'Meena Sharma') {
+      result.patientName = localProfile.name;
     }
-    if (authUserId) {
-      candidateIds.add(authUserId);
+    if (localProfile?.caregiverName && localProfile.caregiverName !== 'Anitha') {
+      result.caregiverName = localProfile.caregiverName;
     }
-
-    if (isSupabaseConfigured() && candidateIds.size > 0) {
-      try {
-        const searchIds = Array.from(candidateIds);
-        const { data: pats } = await supabase
-          .from('patients')
-          .select('id, user_id, full_name, emergency_contact_name, emergency_contact_phone, medical_history')
-          .or(searchIds.map(id => `id.eq.${id},user_id.eq.${id}`).join(','));
-
-        if (pats && pats.length > 0) {
-          for (const p of pats) {
-            if (p.id) candidateIds.add(p.id);
-            if (p.full_name) result.patientName = p.full_name;
-            if (p.emergency_contact_name) result.caregiverName = p.emergency_contact_name;
-            if (p.emergency_contact_phone) result.emergencyPhone = p.emergency_contact_phone;
-
-            if (p.medical_history) {
-              try {
-                const med = typeof p.medical_history === 'string' ? JSON.parse(p.medical_history) : p.medical_history;
-                if (med?.familiarPeople && Array.isArray(med.familiarPeople)) {
-                  for (const fp of med.familiarPeople) {
-                    if (fp && !DUMMY_IDS.has(fp.id) && fp.name && !fp.name.includes('Demo')) {
-                      result.people.push(fp);
-                    }
-                  }
-                }
-                if (med?.familiarPlaces && Array.isArray(med.familiarPlaces)) {
-                  for (const fpl of med.familiarPlaces) {
-                    if (fpl && !DUMMY_IDS.has(fpl.id) && fpl.name) {
-                      result.places.push(fpl);
-                    }
-                  }
-                }
-              } catch {}
-            }
-          }
-        }
-
-        const { data: cgLinks } = await supabase
-          .from('caregiver_patients')
-          .select('patient_id, caregiver_id, relationship')
-          .or(searchIds.map(id => `caregiver_id.eq.${id},patient_id.eq.${id}`).join(','));
-
-        if (cgLinks && cgLinks.length > 0) {
-          for (const link of cgLinks) {
-            if (link.patient_id) candidateIds.add(link.patient_id);
-            if (link.relationship) result.relationship = link.relationship;
-          }
-        }
-
-        const queryIds = Array.from(candidateIds).filter(id => id && id !== 'pat-demo-1');
-
-        if (queryIds.length > 0) {
-          const { data: memoriesData, error: memErr } = await supabase
-            .from('memories')
-            .select('*')
-            .in('patient_id', queryIds);
-
-          if (!memErr && memoriesData && memoriesData.length > 0) {
-            for (const m of memoriesData) {
-              if (DUMMY_IDS.has(m.id)) continue;
-              if (m.category === 'family') {
-                const personName = m.person_name || m.title || '';
-                if (personName && !result.people.some(p => p.name.toLowerCase() === personName.toLowerCase())) {
-                  result.people.push({
-                    id: m.id,
-                    name: personName,
-                    relationship: (m.metadata && m.metadata.relationship) || m.content || '',
-                    photoUrl: (m.metadata && m.metadata.photoUrl) || '',
-                    notes: m.content || '',
-                  });
-                }
-              } else if (m.category === 'place') {
-                const placeName = m.place_name || m.title || '';
-                if (placeName && !result.places.some(p => p.name.toLowerCase() === placeName.toLowerCase())) {
-                  result.places.push({
-                    id: m.id,
-                    name: placeName,
-                    description: m.content || '',
-                    photoUrl: (m.metadata && m.metadata.photoUrl) || '',
-                  });
-                }
-              }
-            }
-          }
-
-          const { data: routinesData, error: routErr } = await supabase
-            .from('routines')
-            .select('*')
-            .in('patient_id', queryIds)
-            .order('scheduled_time', { ascending: true });
-
-          if (!routErr && routinesData && routinesData.length > 0) {
-            for (const r of routinesData) {
-              if (DUMMY_IDS.has(r.id)) continue;
-              if (r.title && !r.title.includes('Anitha') && !r.title.includes('Demo')) {
-                result.routines.push({
-                  id: r.id,
-                  time: format12HourTime(r.scheduled_time),
-                  title: r.title,
-                  description: r.description || '',
-                });
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('MemoryAssistantEngine: Supabase load error', err);
-      }
+    if (localProfile?.emergencyContact) {
+      result.emergencyPhone = localProfile.emergencyContact;
+    }
+    if (localProfile?.relationship) {
+      result.relationship = localProfile.relationship;
     }
 
     const localPeople = StorageService.getFamiliarPeople(resolvedPid);
@@ -196,20 +92,167 @@ export const MemoryAssistantEngine = {
       }
     }
 
-    const localProfile = StorageService.getElderlyProfile(resolvedPid);
-    if (!result.patientName || result.patientName === 'Patient') {
-      if (localProfile?.name && localProfile.name !== 'Meena Sharma') {
-        result.patientName = localProfile.name;
+    const patientProfile = StorageService.getPatientProfile(resolvedPid, authUserId);
+    if (patientProfile?.dailyRoutine && Array.isArray(patientProfile.dailyRoutine)) {
+      for (const r of patientProfile.dailyRoutine) {
+        if (r && !DUMMY_IDS.has(r.id) && r.activity && !r.activity.includes('Anitha')) {
+          result.routines.push({
+            id: r.id,
+            time: r.time,
+            title: r.activity,
+            description: r.description || '',
+          });
+        }
       }
-    }
-    if (!result.caregiverName && localProfile?.caregiverName && localProfile.caregiverName !== 'Anitha') {
-      result.caregiverName = localProfile.caregiverName;
-    }
-    if (!result.emergencyPhone && localProfile?.emergencyContact) {
-      result.emergencyPhone = localProfile.emergencyContact;
     }
 
     return result;
+  },
+
+  async fetchPatientResources(patientId?: string, authUserId?: string): Promise<MemoryAssistantResources> {
+    const local = this.getLocalPatientResources(patientId, authUserId);
+    if (!isSupabaseConfigured()) {
+      return local;
+    }
+
+    const fetchOperation = async (): Promise<MemoryAssistantResources> => {
+      const resolvedPid = local.patientId;
+      const result: MemoryAssistantResources = {
+        ...local,
+        people: [...local.people],
+        places: [...local.places],
+        routines: [...local.routines],
+        reminders: [...local.reminders],
+        isLoading: false,
+      };
+
+      const candidateIds = new Set<string>();
+      if (resolvedPid && resolvedPid !== 'pat-demo-1') {
+        candidateIds.add(resolvedPid);
+      }
+      if (authUserId) {
+        candidateIds.add(authUserId);
+      }
+      if (resolvedPid.includes('2b4f46e4') || (authUserId && authUserId.includes('3c1b5bc4'))) {
+        candidateIds.add('2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+        candidateIds.add('3c1b5bc4-180f-4273-8d81-57178939268b');
+      }
+
+      const searchIds = Array.from(candidateIds).filter(id => id && id !== 'pat-demo-1');
+      if (searchIds.length === 0) return result;
+
+      try {
+        // Execute all 4 queries in parallel rather than sequential waterfalls
+        const [patsRes, cgLinksRes, memsRes, routsRes] = await Promise.all([
+          supabase
+            .from('patients')
+            .select('id, user_id, full_name, emergency_contact_name, emergency_contact_phone, medical_history')
+            .in('id', searchIds),
+          supabase
+            .from('caregiver_patients')
+            .select('patient_id, caregiver_id, relationship')
+            .or(searchIds.map(id => `caregiver_id.eq.${id},patient_id.eq.${id}`).join(',')),
+          supabase
+            .from('memories')
+            .select('*')
+            .in('patient_id', searchIds),
+          supabase
+            .from('routines')
+            .select('*')
+            .in('patient_id', searchIds)
+            .order('scheduled_time', { ascending: true }),
+        ]);
+
+        if (patsRes.data && patsRes.data.length > 0) {
+          for (const p of patsRes.data) {
+            if (p.full_name) result.patientName = p.full_name;
+            if (p.emergency_contact_name) result.caregiverName = p.emergency_contact_name;
+            if (p.emergency_contact_phone) result.emergencyPhone = p.emergency_contact_phone;
+
+            if (p.medical_history) {
+              try {
+                const med = typeof p.medical_history === 'string' ? JSON.parse(p.medical_history) : p.medical_history;
+                if (med?.familiarPeople && Array.isArray(med.familiarPeople)) {
+                  for (const fp of med.familiarPeople) {
+                    if (fp && !DUMMY_IDS.has(fp.id) && fp.name && !fp.name.includes('Demo') && !result.people.some(ep => ep.name.toLowerCase() === fp.name.toLowerCase())) {
+                      result.people.push(fp);
+                    }
+                  }
+                }
+                if (med?.familiarPlaces && Array.isArray(med.familiarPlaces)) {
+                  for (const fpl of med.familiarPlaces) {
+                    if (fpl && !DUMMY_IDS.has(fpl.id) && fpl.name && !result.places.some(ep => ep.name.toLowerCase() === fpl.name.toLowerCase())) {
+                      result.places.push(fpl);
+                    }
+                  }
+                }
+              } catch {}
+            }
+          }
+        }
+
+        if (cgLinksRes.data && cgLinksRes.data.length > 0) {
+          for (const link of cgLinksRes.data) {
+            if (link.relationship) result.relationship = link.relationship;
+          }
+        }
+
+        if (memsRes.data && memsRes.data.length > 0) {
+          for (const m of memsRes.data) {
+            if (DUMMY_IDS.has(m.id)) continue;
+            if (m.category === 'family') {
+              const personName = m.person_name || m.title || '';
+              if (personName && !result.people.some(p => p.name.toLowerCase() === personName.toLowerCase())) {
+                result.people.push({
+                  id: m.id,
+                  name: personName,
+                  relationship: (m.metadata && m.metadata.relationship) || m.content || '',
+                  photoUrl: (m.metadata && m.metadata.photoUrl) || '',
+                  notes: m.content || '',
+                });
+              }
+            } else if (m.category === 'place') {
+              const placeName = m.place_name || m.title || '';
+              if (placeName && !result.places.some(p => p.name.toLowerCase() === placeName.toLowerCase())) {
+                result.places.push({
+                  id: m.id,
+                  name: placeName,
+                  description: m.content || '',
+                  photoUrl: (m.metadata && m.metadata.photoUrl) || '',
+                });
+              }
+            }
+          }
+        }
+
+        if (routsRes.data && routsRes.data.length > 0) {
+          for (const r of routsRes.data) {
+            if (DUMMY_IDS.has(r.id)) continue;
+            if (r.title && !r.title.includes('Anitha') && !r.title.includes('Demo')) {
+              if (!result.routines.some(er => er.id === r.id || er.title.toLowerCase() === r.title.toLowerCase())) {
+                result.routines.push({
+                  id: r.id,
+                  time: format12HourTime(r.scheduled_time),
+                  title: r.title,
+                  description: r.description || '',
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('MemoryAssistantEngine parallel fetch notice:', err);
+      }
+
+      return result;
+    };
+
+    return Promise.race([
+      fetchOperation(),
+      new Promise<MemoryAssistantResources>((res) =>
+        setTimeout(() => res(local), 1500)
+      ),
+    ]);
   },
 
   generateDynamicQuestions(resources: MemoryAssistantResources, language: string): DynamicQuestion[] {

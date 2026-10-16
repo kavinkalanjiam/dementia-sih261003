@@ -44,13 +44,21 @@ function convertToPostgresTime(timeStr: string): string {
 export const Reminders: React.FC = () => {
   const { user, role } = useAuth();
   const { t, language, languageProfile } = useI18n();
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-
   const activePatientId =
     StorageService.getActivePatientId(user?.id) ||
     (user?.id && user.role !== 'caregiver' ? user.id : undefined);
+
+  const [reminders, setReminders] = useState<Reminder[]>(() => {
+    const localReminders = StorageService.getReminders(activePatientId);
+    return (localReminders || []).filter(
+      r => r.id !== 'rem-1' && r.id !== 'rem-2' && r.id !== 'rem-3' &&
+           r.title !== 'Breakfast & Morning Routine' &&
+           r.title !== 'Daily Brain Exercise Game' &&
+           r.title !== 'Daughter Anitha Visit'
+    );
+  });
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // New Reminder form fields
   const [title, setTitle] = useState<string>('');
@@ -61,60 +69,10 @@ export const Reminders: React.FC = () => {
   const loadReminders = useCallback(async () => {
     try {
       const pid = activePatientId;
-      let cloudLoaded = false;
-
-      // 1. Fetch from Supabase routines table (authoritative source of truth)
-      if (isSupabaseConfigured() && pid && pid !== 'pat-demo-1') {
-        try {
-          const { data: cloudRoutines, error } = await supabase
-            .from('routines')
-            .select('*')
-            .eq('patient_id', pid)
-            .order('scheduled_time', { ascending: true });
-
-          if (!error && cloudRoutines) {
-            const list: Reminder[] = cloudRoutines.map(r => ({
-              id: r.id,
-              title: r.title,
-              time: formatPostgresTimeToDisplay(r.scheduled_time),
-              category: (r.description && r.description.startsWith('Category: ')
-                ? r.description.replace('Category: ', '')
-                : 'routine') as any,
-              repeat: r.repeat_pattern || 'daily',
-              description: r.description || '',
-              isCompleted: !r.enabled,
-              createdAt: r.created_at,
-            }));
-
-            // Filter out any demo placeholders
-            const cleaned = list.filter(
-              r => r.id !== 'rem-1' && r.id !== 'rem-2' && r.id !== 'rem-3' &&
-                   r.title !== 'Breakfast & Morning Routine' &&
-                   r.title !== 'Daily Brain Exercise Game' &&
-                   r.title !== 'Daughter Anitha Visit'
-            );
-
-            // Cleanse and overwrite local patient cache with authoritative cloud routines
-            StorageService.savePatientReminders(cleaned, pid);
-            setReminders(cleaned);
-            cloudLoaded = true;
-          }
-        } catch (cloudErr) {
-          console.warn('Cloud routines fetch error:', cloudErr);
-        }
-      }
-
-      // 2. Offline fallback (or demo patient)
-      if (!cloudLoaded) {
-        const localReminders = StorageService.getReminders(pid);
-        const cleaned = (localReminders || []).filter(
-          r => r.id !== 'rem-1' && r.id !== 'rem-2' && r.id !== 'rem-3' &&
-               r.title !== 'Breakfast & Morning Routine' &&
-               r.title !== 'Daily Brain Exercise Game' &&
-               r.title !== 'Daughter Anitha Visit'
-        );
-        setReminders(cleaned);
-      }
+      const cleaned = await StorageService.fetchRemindersFromCloud(pid);
+      setReminders(cleaned);
+    } catch (cloudErr) {
+      console.warn('Routines fetch error:', cloudErr);
     } finally {
       setLoading(false);
     }

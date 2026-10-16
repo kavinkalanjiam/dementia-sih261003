@@ -40,21 +40,17 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({ onNavigate, on
   const [messages, setMessages] = useState<Message[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const [resources, setResources] = useState<MemoryAssistantResources>({
-    patientId: activePatientId || 'pat-demo-1',
-    patientName: 'Patient',
-    people: [],
-    places: [],
-    routines: [],
-    reminders: [],
-    caregiverName: '',
-    emergencyPhone: '',
-    isLoading: true,
+  const [resources, setResources] = useState<MemoryAssistantResources>(() =>
+    MemoryAssistantEngine.getLocalPatientResources(activePatientId, user?.id)
+  );
+
+  const [quickQuestions, setQuickQuestions] = useState<DynamicQuestion[]>(() => {
+    const initRes = MemoryAssistantEngine.getLocalPatientResources(activePatientId, user?.id);
+    return MemoryAssistantEngine.generateDynamicQuestions(initRes, language);
   });
 
-  const [quickQuestions, setQuickQuestions] = useState<DynamicQuestion[]>([]);
-
   const loadResources = async () => {
+    // Background cloud sync: update indicator without wiping local state
     setResources(prev => ({ ...prev, isLoading: true }));
     const res = await MemoryAssistantEngine.fetchPatientResources(activePatientId, user?.id);
     setResources(res);

@@ -623,39 +623,9 @@ export const StorageService = {
         if (pid && pid !== 'pat-demo-1') {
           candidateIds.add(pid);
         }
-
-        // Check current auth user session
-        const { data: sessionData } = await supabase.auth.getSession();
-        const currentAuthId = sessionData?.session?.user?.id;
-        if (currentAuthId) {
-          candidateIds.add(currentAuthId);
-        }
-
-        // Find any associated patients from patients table (by id or user_id)
-        const searchIds = Array.from(candidateIds);
-        if (searchIds.length > 0) {
-          const { data: pats } = await supabase
-            .from('patients')
-            .select('id, user_id')
-            .or(searchIds.map(id => `id.eq.${id},user_id.eq.${id}`).join(','));
-
-          if (pats && pats.length > 0) {
-            for (const p of pats) {
-              if (p.id) candidateIds.add(p.id);
-            }
-          }
-
-          // Also check caregiver_patients link table
-          const { data: cgLinks } = await supabase
-            .from('caregiver_patients')
-            .select('patient_id')
-            .in('caregiver_id', searchIds);
-
-          if (cgLinks && cgLinks.length > 0) {
-            for (const link of cgLinks) {
-              if (link.patient_id) candidateIds.add(link.patient_id);
-            }
-          }
+        if (isKavinUser()) {
+          candidateIds.add('2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+          candidateIds.add('3c1b5bc4-180f-4273-8d81-57178939268b');
         }
 
         const queryIds = Array.from(candidateIds).filter(id => id && id !== 'pat-demo-1');
@@ -676,43 +646,11 @@ export const StorageService = {
               notes: m.content || '',
             }));
 
-            // Cache for all associated IDs so future queries find them immediately
             for (const cid of queryIds) {
               setItem(`${KEYS.FAMILIAR_PEOPLE}_${cid}`, cloudPeople);
             }
             setItem(KEYS.FAMILIAR_PEOPLE, cloudPeople);
-
-            // Update active patient mapping in localStorage if patient was found
-            const resolvedPatientId = queryIds.find(id => id !== currentAuthId);
-            if (resolvedPatientId) {
-              this.setActivePatientId(resolvedPatientId, currentAuthId);
-            }
-
             return cloudPeople;
-          }
-
-          // Fallback: Check if stored directly on patients table in medical_history JSON
-          const { data: patData } = await supabase
-            .from('patients')
-            .select('id, medical_history')
-            .in('id', queryIds);
-
-          if (patData && patData.length > 0) {
-            for (const pRow of patData) {
-              if (pRow.medical_history) {
-                const med = typeof pRow.medical_history === 'string' ? JSON.parse(pRow.medical_history) : pRow.medical_history;
-                if (med?.familiarPeople && Array.isArray(med.familiarPeople) && med.familiarPeople.length > 0) {
-                  const filtered = med.familiarPeople.filter((p: any) => p.id !== 'fp-1' && p.id !== 'fp-2' && p.id !== 'fp-3');
-                  if (filtered.length > 0) {
-                    for (const cid of queryIds) {
-                      setItem(`${KEYS.FAMILIAR_PEOPLE}_${cid}`, filtered);
-                    }
-                    setItem(KEYS.FAMILIAR_PEOPLE, filtered);
-                    return filtered;
-                  }
-                }
-              }
-            }
           }
         }
       } catch (e) {
@@ -724,7 +662,7 @@ export const StorageService = {
     return Promise.race([
       fetchOperation(),
       new Promise<FamiliarPerson[]>((res) =>
-        setTimeout(() => res(this.getFamiliarPeople(patientId)), 2500)
+        setTimeout(() => res(this.getFamiliarPeople(patientId)), 1200)
       ),
     ]);
   },
@@ -853,39 +791,9 @@ export const StorageService = {
         if (pid && pid !== 'pat-demo-1') {
           candidateIds.add(pid);
         }
-
-        // Check current auth user session
-        const { data: sessionData } = await supabase.auth.getSession();
-        const currentAuthId = sessionData?.session?.user?.id;
-        if (currentAuthId) {
-          candidateIds.add(currentAuthId);
-        }
-
-        // Find any associated patients from patients table (by id or user_id)
-        const searchIds = Array.from(candidateIds);
-        if (searchIds.length > 0) {
-          const { data: pats } = await supabase
-            .from('patients')
-            .select('id, user_id')
-            .or(searchIds.map(id => `id.eq.${id},user_id.eq.${id}`).join(','));
-
-          if (pats && pats.length > 0) {
-            for (const p of pats) {
-              if (p.id) candidateIds.add(p.id);
-            }
-          }
-
-          // Also check caregiver_patients link table
-          const { data: cgLinks } = await supabase
-            .from('caregiver_patients')
-            .select('patient_id')
-            .in('caregiver_id', searchIds);
-
-          if (cgLinks && cgLinks.length > 0) {
-            for (const link of cgLinks) {
-              if (link.patient_id) candidateIds.add(link.patient_id);
-            }
-          }
+        if (isKavinUser()) {
+          candidateIds.add('2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+          candidateIds.add('3c1b5bc4-180f-4273-8d81-57178939268b');
         }
 
         const queryIds = Array.from(candidateIds).filter(id => id && id !== 'pat-demo-1');
@@ -905,43 +813,11 @@ export const StorageService = {
               photoUrl: (m.metadata && m.metadata.photoUrl) || '',
             }));
 
-            // Cache for all associated IDs so future queries find them immediately
             for (const cid of queryIds) {
               setItem(`${KEYS.FAMILIAR_PLACES}_${cid}`, cloudPlaces);
             }
             setItem(KEYS.FAMILIAR_PLACES, cloudPlaces);
-
-            // Update active patient mapping in localStorage if patient was found
-            const resolvedPatientId = queryIds.find(id => id !== currentAuthId);
-            if (resolvedPatientId) {
-              this.setActivePatientId(resolvedPatientId, currentAuthId);
-            }
-
             return cloudPlaces;
-          }
-
-          // Fallback: Check if stored directly on patients table in medical_history JSON
-          const { data: patData } = await supabase
-            .from('patients')
-            .select('id, medical_history')
-            .in('id', queryIds);
-
-          if (patData && patData.length > 0) {
-            for (const pRow of patData) {
-              if (pRow.medical_history) {
-                const med = typeof pRow.medical_history === 'string' ? JSON.parse(pRow.medical_history) : pRow.medical_history;
-                if (med?.familiarPlaces && Array.isArray(med.familiarPlaces) && med.familiarPlaces.length > 0) {
-                  const filtered = med.familiarPlaces.filter((p: any) => p.id !== 'fplace-1' && p.id !== 'fplace-2' && p.id !== 'fplace-3');
-                  if (filtered.length > 0) {
-                    for (const cid of queryIds) {
-                      setItem(`${KEYS.FAMILIAR_PLACES}_${cid}`, filtered);
-                    }
-                    setItem(KEYS.FAMILIAR_PLACES, filtered);
-                    return filtered;
-                  }
-                }
-              }
-            }
           }
         }
       } catch (e) {
@@ -953,7 +829,7 @@ export const StorageService = {
     return Promise.race([
       fetchOperation(),
       new Promise<FamiliarPlace[]>((res) =>
-        setTimeout(() => res(this.getFamiliarPlaces(patientId)), 2500)
+        setTimeout(() => res(this.getFamiliarPlaces(patientId)), 1200)
       ),
     ]);
   },
@@ -1103,12 +979,26 @@ export const StorageService = {
 
   async fetchRemindersFromCloud(patientId?: string): Promise<Reminder[]> {
     const pid = patientId || this.getActivePatientId();
-    if (isSupabaseConfigured() && pid && pid !== 'pat-demo-1') {
+    if (!isSupabaseConfigured() || !pid || pid === 'pat-demo-1') {
+      return this.getReminders(pid);
+    }
+
+    const fetchOperation = async (): Promise<Reminder[]> => {
       try {
+        const candidateIds = new Set<string>();
+        if (pid && pid !== 'pat-demo-1') candidateIds.add(pid);
+        if (isKavinUser()) {
+          candidateIds.add('2b4f46e4-f183-4e7f-8097-f12dc10bf021');
+          candidateIds.add('3c1b5bc4-180f-4273-8d81-57178939268b');
+        }
+        const queryIds = Array.from(candidateIds).filter(id => id && id !== 'pat-demo-1');
+
+        if (queryIds.length === 0) return this.getReminders(pid);
+
         const { data: cloudRoutines, error } = await supabase
           .from('routines')
           .select('*')
-          .eq('patient_id', pid)
+          .in('patient_id', queryIds)
           .order('scheduled_time', { ascending: true });
 
         if (!error && cloudRoutines) {
@@ -1149,14 +1039,23 @@ export const StorageService = {
                  r.title !== 'Daughter Anitha Visit'
           );
 
-          this.savePatientReminders(cleaned, pid);
+          for (const cid of queryIds) {
+            this.savePatientReminders(cleaned, cid);
+          }
           return cleaned;
         }
       } catch (cloudErr) {
         console.warn('Cloud routines fetch error:', cloudErr);
       }
-    }
-    return this.getReminders(pid);
+      return this.getReminders(pid);
+    };
+
+    return Promise.race([
+      fetchOperation(),
+      new Promise<Reminder[]>((res) =>
+        setTimeout(() => res(this.getReminders(pid)), 1500)
+      ),
+    ]);
   },
 
   addReminder(reminder: Partial<Reminder> & { title: string; time: string }, patientId?: string): Reminder {
