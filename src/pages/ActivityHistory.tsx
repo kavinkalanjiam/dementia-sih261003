@@ -1,13 +1,89 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StorageService } from '../services/storage';
-import { GameSession, CognitiveCategory } from '../types';
+import { OfflineStorage } from '../offline/offlineStorage';
+import { GameSession, CognitiveCategory, GameType } from '../types';
 import { useI18n } from '../i18n';
-import { Clock, Filter, Trophy, Calendar, Award } from 'lucide-react';
+import { Clock, Filter, Trophy, Calendar, Award, RefreshCw } from 'lucide-react';
 
 export const ActivityHistory: React.FC = () => {
   const { t, languageProfile } = useI18n();
-  const [sessions] = useState<GameSession[]>(StorageService.getGameSessions());
+  const [sessions, setSessions] = useState<GameSession[]>(() => StorageService.getGameSessions());
   const [filterCategory, setFilterCategory] = useState<CognitiveCategory | 'all'>('all');
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const loadAllSessions = async () => {
+    setLoading(true);
+    try {
+      // 1. Gather all synchronous local storage sessions
+      const local = StorageService.getGameSessions();
+      const sessionMap = new Map<string, GameSession>();
+      for (const s of local) {
+        if (s && s.id) sessionMap.set(s.id, s);
+      }
+
+      // 2. Query IndexedDB (Dexie) game attempts so offline-played games appear
+      try {
+        const dexieAttempts = await OfflineStorage.getGameAttempts();
+        const GAME_METADATA: Record<string, { title: string; category: CognitiveCategory }> = {
+          'memory-match': { title: '🧩 Memory Match', category: 'memory' },
+          'sequence-recall': { title: '🔴 Sequence Recall', category: 'attention' },
+          'name-face': { title: '👤 Who Is This?', category: 'recognition' },
+          'familiar-places': { title: '🏠 Familiar Places', category: 'familiarity' },
+          'number-memory': { title: '🔢 Number Memory', category: 'memory' },
+          'voice-recall': { title: '🗣️ Voice Recall', category: 'language' },
+          'object-recall': { title: '📸 Object Recall', category: 'recall' },
+          'story-recall': { title: '📖 Story Recall', category: 'recall' },
+          'familiar-sounds': { title: '🎵 Familiar Sounds', category: 'recognition' },
+        };
+
+        for (const att of dexieAttempts) {
+          if (!sessionMap.has(att.id)) {
+            const meta = GAME_METADATA[att.game_type] || {
+              title: att.game_type || 'Cognitive Activity',
+              category: 'memory' as CognitiveCategory,
+            };
+            sessionMap.set(att.id, {
+              id: att.id,
+              gameId: (att.game_type || 'memory-match') as GameType,
+              gameTitle: meta.title,
+              category: meta.category,
+              score: att.score || 0,
+              accuracy: att.accuracy || 0,
+              timeSeconds: att.duration_seconds || 0,
+              difficultyLevel: att.difficulty_level || 1,
+              timestamp: att.created_at || att.timestamp || new Date().toISOString(),
+              attempts: att.total_questions || att.correct_answers || 1,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Dexie attempts load notice:', err);
+      }
+
+      // 3. Query Supabase Cloud if connected
+      try {
+        const cloudSessions = await StorageService.fetchGameSessionsFromCloud();
+        for (const cs of cloudSessions) {
+          if (cs && cs.id && !sessionMap.has(cs.id)) {
+            sessionMap.set(cs.id, cs);
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud sessions fetch notice:', err);
+      }
+
+      const merged = Array.from(sessionMap.values()).sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setSessions(merged);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAllSessions();
+  }, []);
 
   const filteredSessions = sessions.filter(s => {
     if (filterCategory === 'all') return true;
@@ -23,28 +99,41 @@ export const ActivityHistory: React.FC = () => {
             <span className="text-xs font-bold px-2 py-0.5 bg-[#DDE9D9] text-[#176B61] rounded-full border border-[#B7D4CC]">
               {languageProfile.flag} {languageProfile.nativeName}
             </span>
+            <span className="text-xs font-bold px-2.5 py-0.5 bg-white text-[#66736D] rounded-full border border-[#E4DED4]">
+              {sessions.length} recorded
+            </span>
           </div>
           <p className="text-sm text-[#66736D]">{t('history.subtitle')}</p>
         </div>
 
-        {/* Category Filter buttons */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-[#E4DED4] shadow-xs">
-          <span className="text-xs font-bold text-[#66736D] px-2 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5" /> {t('history.filter')}
-          </span>
-          {(['all', 'memory', 'attention', 'recall', 'recognition'] as const).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setFilterCategory(cat)}
-              className={`px-3 py-1 rounded-xl text-xs font-extrabold capitalize transition cursor-pointer ${
-                filterCategory === cat
-                  ? 'bg-[#176B61] text-white shadow-xs'
-                  : 'text-[#66736D] hover:bg-[#F4EBD7] hover:text-[#26332F]'
-              }`}
-            >
-              {t(`cat.${cat}` as any)}
-            </button>
-          ))}
+        {/* Category Filter buttons & Refresh */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={loadAllSessions}
+            title="Refresh History"
+            className="p-2 bg-white hover:bg-[#FAF9F4] text-[#26332F] rounded-2xl border border-[#E4DED4] transition cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#176B61]' : ''}`} />
+          </button>
+
+          <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-[#E4DED4] shadow-xs">
+            <span className="text-xs font-bold text-[#66736D] px-2 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" /> {t('history.filter')}
+            </span>
+            {(['all', 'memory', 'attention', 'recall', 'recognition'] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3 py-1 rounded-xl text-xs font-extrabold capitalize transition cursor-pointer ${
+                  filterCategory === cat
+                    ? 'bg-[#176B61] text-white shadow-xs'
+                    : 'text-[#66736D] hover:bg-[#F4EBD7] hover:text-[#26332F]'
+                }`}
+              >
+                {t(`cat.${cat}` as any)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

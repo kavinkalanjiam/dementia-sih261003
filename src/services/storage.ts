@@ -1115,12 +1115,30 @@ export const StorageService = {
 
   getGameSessions(patientId?: string): GameSession[] {
     const pid = patientId || this.getActivePatientId();
+    const globalSessions = getItem<GameSession[]>(KEYS.GAME_SESSIONS, INITIAL_GAME_SESSIONS);
+
+    // Merge patient-specific sessions with historical global sessions so past games are never hidden
     if (pid && pid !== 'pat-demo-1') {
       const stored = getItem<GameSession[]>(`${KEYS.GAME_SESSIONS}_${pid}`, []);
-      if (stored && stored.length > 0) return stored;
-      return [];
+      const sessionMap = new Map<string, GameSession>();
+
+      for (const s of stored) {
+        if (s && s.id) sessionMap.set(s.id, s);
+      }
+      for (const s of globalSessions) {
+        if (s && s.id && !sessionMap.has(s.id)) {
+          sessionMap.set(s.id, s);
+        }
+      }
+
+      return Array.from(sessionMap.values()).sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
     }
-    return getItem<GameSession[]>(KEYS.GAME_SESSIONS, INITIAL_GAME_SESSIONS);
+
+    return (globalSessions || []).sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
   },
 
   /**
