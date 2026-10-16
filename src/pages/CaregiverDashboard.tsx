@@ -379,29 +379,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onNaviga
             <span className="bg-[#DDE9D9] text-[#176B61] text-xs uppercase font-extrabold tracking-wider px-3 py-1 rounded-full border border-[#BFCFC5]">
               {t('caregiver.portal')}
             </span>
-            {availablePatients.length > 1 ? (
-              <select
-                value={patient.id}
-                onChange={async (e) => {
-                  const selected = StorageService.getPatientProfile(e.target.value, user?.id);
-                  setPatient(selected);
-                  StorageService.setActivePatientId(selected.id, user?.id);
-                  setCareTeam(CareTeamService.getCareTeam(selected.id));
-                  await refreshData(selected.id);
-                }}
-                className="bg-white border border-[#E4DED4] text-[#26332F] text-xs font-bold rounded-full px-3 py-1 outline-none cursor-pointer"
-              >
-                {availablePatients.map(p => (
-                  <option key={p.id} value={p.id} className="bg-white text-[#26332F]">
-                    Patient: {p.basicInfo.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-bold px-3 py-1 rounded-full border border-[#BFCFC5] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#176B61] animate-ping"></span> {t('status.synced')}: {patient.basicInfo.name}
-              </span>
-            )}
+            <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-extrabold px-3 py-1 rounded-full border border-[#BFCFC5] flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-[#176B61] animate-ping"></span> Patient: {patient.basicInfo.name}
+            </span>
             <span className="bg-[#F4EBD7] text-[#26332F] text-xs font-bold px-3 py-1 rounded-full border border-[#E4DED4] flex items-center gap-1">
               {languageProfile.flag} {languageProfile.nativeName} ({state})
             </span>

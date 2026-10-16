@@ -104,6 +104,28 @@ export const StorageService = {
   },
 
   getActivePatientId(caregiverId?: string): string {
+    // 0. If caregiver is Kavin or caregiver session is Kavin, strictly return Pushpa's ID
+    if (
+      caregiverId === '3c1b5bc4-180f-4273-8d81-57178939268b' ||
+      caregiverId?.toLowerCase().includes('kavin')
+    ) {
+      return '2b4f46e4-f183-4e7f-8097-f12dc10bf021';
+    }
+
+    try {
+      const cgSessionStr = typeof window !== 'undefined' ? localStorage.getItem('mindcare_caregiver_session') : null;
+      if (cgSessionStr) {
+        const cg = JSON.parse(cgSessionStr);
+        if (
+          cg?.email?.toLowerCase().includes('kavin') ||
+          cg?.name?.toLowerCase().includes('kavin') ||
+          cg?.id === '3c1b5bc4-180f-4273-8d81-57178939268b'
+        ) {
+          return '2b4f46e4-f183-4e7f-8097-f12dc10bf021';
+        }
+      }
+    } catch {}
+
     // 1. If caregiverId is provided, check caregiver-patient mapping
     if (caregiverId) {
       const cgMap = getItem<Record<string, string>>('mindcare_caregiver_patient_map', {});

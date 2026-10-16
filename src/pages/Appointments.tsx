@@ -355,24 +355,9 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ onNavigate }
               Doctor Consultations
             </span>
 
-            {/* Patient Switcher */}
-            {availablePatients.length > 1 ? (
-              <select
-                value={patient?.id}
-                onChange={(e) => handleSwitchPatient(e.target.value)}
-                className="bg-white border border-[#E4DED4] text-[#26332F] text-xs font-bold rounded-full px-3 py-1 outline-none cursor-pointer"
-              >
-                {availablePatients.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    Patient: {p.basicInfo.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-bold px-3 py-1 rounded-full border border-[#BFCFC5]">
-                Patient: {patient?.basicInfo?.name || 'Selected Patient'}
-              </span>
-            )}
+            <span className="bg-[#DDE9D9] text-[#176B61] text-xs font-extrabold px-3 py-1 rounded-full border border-[#BFCFC5] flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-[#176B61] animate-ping"></span> Patient: {patient?.basicInfo?.name || 'Pushpa'}
+            </span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#26332F]">
